@@ -1,0 +1,19 @@
+# Pre-plugin QGIS projects, data and reference material (kept locally, not versioned)
+archive/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# QGIS
+*.qgs~
+*.qgz~
+*.aux.xml
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

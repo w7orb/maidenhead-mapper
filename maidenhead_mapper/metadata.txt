@@ -1,0 +1,13 @@
+[general]
+name=Maidenhead Mapper
+qgisMinimumVersion=3.34
+description=Maidenhead grid locator layers and WSJT-X log mapping for amateur radio.
+about=Builds correctly aligned Maidenhead field (2-char) and square (4-char) grid layers. Planned: import a WSJT-X ADIF log and place a styled marker for each station worked.
+version=0.1.0
+author=Cody Tews
+email=cwtews@gmail.com
+tags=ham radio,amateur radio,maidenhead,grid locator,wsjt-x,adif
+category=Vector
+icon=icons/icon.svg
+experimental=True
+hasProcessingProvider=yes
