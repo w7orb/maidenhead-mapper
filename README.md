@@ -6,6 +6,7 @@ QGIS plugin for amateur-radio Maidenhead maps.
 - **Fetch from PSK Reporter**: downloads the last 1–24 hours of reports for a callsign into a folder, then maps the whole folder. It keeps to PSK Reporter's limit of one query per 5 minutes.
 - **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*, or from [pskreporter-analytics](https://github.com/cwtews/pskreporter-analytics)) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
 - **Import WSJT-X ALL.TXT**: replays WSJT-X logs through the live map's logic, giving station markers and exchange lines (including exchanges between other stations) for past sessions.
+- **Ionosphere (KC2G)**: fetch current ionosonde data and MUF/foF2/hmF2 maps, and check any station or exchange layer against them. Each path gets its MUF, layer height, hop count and whether F2 can explain it, plus a layer of reflection points.
 - **Activity timeline**: a chart of reports per hour for any of the above (PSK Reporter, ALL.TXT, live or saved sessions). Drag across it to map only those hours.
 - **WSJT-X live map**: listens to WSJT-X's UDP feed and plots every station it decodes. Markers update every 2 s and fade over a set time since each station was last heard. Stations you log a QSO with become red stars. Works alongside JTAlert/GridTracker via multicast.
 
@@ -57,6 +58,19 @@ Restart QGIS, then enable **Maidenhead Mapper** under *Plugins → Manage and In
 - **ALL.TXT file(s)**: one or more logs (WSJT-X 2.1+ format). Don't mix two receivers' logs from the same time; that counts everything twice.
 - **My callsign / grid**: your callsign marks your own QSOs, and ALL.TXT `Tx` lines fill in your side of them. Your grid is used for distance, bearing and hops.
 - Outputs two layers: **WSJT-X stations (ALL.TXT)** and **WSJT-X exchanges (ALL.TXT)**, with the same fields and colours as the live map (no fading).
+
+### Ionosphere: fetch and check paths
+
+Data comes from [KC2G](https://prop.kc2g.com): current GIRO/INGV ionosonde measurements, and worldwide contour maps of MUF(3000), foF2 and hmF2 built from them over the IRI-2020 model. It is cached and re-downloaded at most every 15 minutes. There is **no history**, so this is for current activity (the live map, today's fetches and logs).
+
+- **Fetch ionosphere (KC2G)**: ionosondes that reported recently (foF2, hmF2, MUF(3000), confidence) and one contour map (MUF(3000), foF2 or hmF2).
+- **Check paths against the ionosphere**: input any station layer (paths from *My grid*) or exchange layer (grid_a to grid_b). For each path it works out:
+  - the likely hop count using the layer height at the reflection points (`hops_iono`, `takeoff_iono`);
+  - each hop's MUF from the secant law, scaled to KC2G's MUF(3000) there; the path MUF is the lowest (`muf_mhz`, with `fof2_mhz`, `hmf2_km`);
+  - `f2_status`: **F2** (the band is at or below the MUF), **above F2 MUF** (not explained by simple F2 hops: sporadic-E, scatter, long path, or the map is off), or **no data**;
+  - `bands_f2`: which of the path's bands F2 supports.
+  Paths more than 3 hours (adjustable) from the data get *no data*. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, one per hop, with the layer and MUF there.
+- Near a current, trusted ionosonde (confidence 50 or higher), the maps are corrected towards its measurements; the correction fades out over about 1,000 km. Contour maps can't show peaks above their top level (MUF(3000) stops at 28 MHz), and this fills that in where there's an ionosonde.
 
 ### Activity timeline
 
@@ -119,7 +133,7 @@ maidenhead_mapper/
   core/          pure Python, no QGIS imports: locator math, bands, PSK Reporter
                  loading/summaries/queries, hourly counts, WSJT-X UDP protocol,
                  FT8 message parsing, exchanges, live model + replay, ALL.TXT,
-                 hop geometry
+                 hop geometry, ionosphere (KC2G maps, MUF per path)
   algorithms/    Processing algorithms and shared styling
   timeline/      activity timeline panel, bar chart, and data sources
   live/          UDP listener, live station/exchange layers, session saving, dock panel

@@ -29,6 +29,22 @@ BANDS = (
 )
 BAND_NAMES = tuple(b[0] for b in BANDS)
 
+# Standard FT8 dial frequency per band (MHz): the frequency a band name stands
+# for when a path has only a band (e.g. for MUF checks).
+FT8_MHZ = {"160m": 1.840, "80m": 3.573, "60m": 5.357, "40m": 7.074, "30m": 10.136, "20m": 14.074,
+           "17m": 18.100, "15m": 21.074, "12m": 24.915, "10m": 28.074, "6m": 50.313, "4m": 70.154,
+           "2m": 144.174}
+
+
+def band_mhz(name) -> Optional[float]:
+    """Representative frequency for a band name: its FT8 frequency, else its middle."""
+    if name in FT8_MHZ:
+        return FT8_MHZ[name]
+    for n, lo, hi in BANDS:
+        if n == name:
+            return (lo + hi) / 2
+    return None
+
 
 def band_for_hz(freq_hz) -> Optional[str]:
     """Band name for a frequency in Hz (PSK Reporter's unit), else None."""

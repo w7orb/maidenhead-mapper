@@ -8,6 +8,7 @@ from qgis.PyQt.QtGui import QIcon
 from .algorithms.create_grid import CreateGridAlgorithm
 from .algorithms.fetch_psk import FetchPskAlgorithm
 from .algorithms.import_alltxt import ImportAllTxtAlgorithm
+from .algorithms.ionosphere import CheckPathsAlgorithm, FetchIonosphereAlgorithm
 from .algorithms.import_psk import ImportPskAlgorithm
 
 ICON = os.path.join(os.path.dirname(__file__), "icons", "icon.svg")
@@ -28,3 +29,5 @@ class MaidenheadProvider(QgsProcessingProvider):
         self.addAlgorithm(ImportPskAlgorithm())
         self.addAlgorithm(FetchPskAlgorithm())
         self.addAlgorithm(ImportAllTxtAlgorithm())
+        self.addAlgorithm(FetchIonosphereAlgorithm())
+        self.addAlgorithm(CheckPathsAlgorithm())

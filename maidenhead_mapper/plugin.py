@@ -15,6 +15,8 @@ ACTIONS = [
     ("maidenhead:fetch_psk", "Fetch from PSK Reporter…"),
     ("maidenhead:import_psk", "Import PSK Reporter reports…"),
     ("maidenhead:import_alltxt", "Import WSJT-X ALL.TXT…"),
+    ("maidenhead:fetch_ionosphere", "Fetch ionosphere (KC2G)…"),
+    ("maidenhead:check_paths", "Check paths against the ionosphere…"),
 ]
 
 
