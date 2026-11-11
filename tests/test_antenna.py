@@ -61,3 +61,56 @@ def test_real_recordings_match_prototype():
     assert c.total.median_db == 1.0
     nw = c.by_sector[14]                                    # NW
     assert nw.median_db >= 3
+
+
+class FlatIono:
+    """Uniform ionosphere: (foF2, hmF2, MUF(3000)) everywhere."""
+    def __init__(self, when, fof2=9.0, hmf2=300.0, mufd=27.0):
+        self.time, self.r12, self.ionosondes = when, 100.0, []
+        self._v = (fof2, hmf2, mufd)
+
+    def at(self, lon, lat):
+        return self._v
+
+
+def test_match_keeps_slot_and_frequency():
+    a = [antenna.Decode(T0, "CQ K1ABC FN42", -5, None, 28.074)]
+    b = [antenna.Decode(T0, "CQ K1ABC FN42", -9, None, None)]
+    m = antenna.match(a, b)[0]
+    assert m.slot == T0 and m.mhz == 28.074
+
+
+def test_geometric_default_keeps_the_300km_angle():
+    a = [antenna.Decode(T0, "CQ K1ABC FN42", -5, None, 14.074)]
+    b = [antenna.Decode(T0, "CQ K1ABC FN42", -9, None, 14.074)]
+    c = antenna.compare(antenna.match(a, b), antenna.learn_grids(a, b), "CN85on")
+    p = c.placed["K1ABC"]
+    assert p["method"] == "geometric" and p["takeoff_deg"] == p["takeoff_300_deg"]
+    assert c.methods == {"geometric": 1}
+
+
+def test_iono_angle_follows_layer_height_through_the_day():
+    # same station, two times: a low night layer gives a lower angle than a high day layer
+    t1, t2 = T0, T0 + dt.timedelta(hours=6)
+    heights = {t1: 230.0, t2: 350.0}
+    angle = antenna.iono_angle(lambda when: (FlatIono(when, 12.0, heights[when], 40.0), "model"))
+    msgs = [(t1, -5, -9), (t2, -6, -8)]
+    a = [antenna.Decode(t, "CQ K1ABC FN42", sa, None, 14.074) for t, sa, _ in msgs]
+    b = [antenna.Decode(t, "CQ K1ABC FN42", sb, None, 14.074) for t, _, sb in msgs]
+    c = antenna.compare(antenna.match(a, b), antenna.learn_grids(a, b), "CN85on", angle)
+    p = c.placed["K1ABC"]
+    assert p["method"] == "model" and p["takeoff_min_deg"] < p["takeoff_max_deg"]
+    assert sum(b_.n_both for b_ in c.by_takeoff.values()) == 2
+    assert c.modes == {"F2": 2}
+
+
+def test_iono_angle_sends_es_paths_to_their_own_bin():
+    # 10m, ~1,500 km (Portland -> Colorado), foF2 far too low for F2: sporadic-E
+    angle = antenna.iono_angle(lambda when: (FlatIono(when, 4.0, 300.0, 12.0), "KC2G"))
+    a = [antenna.Decode(T0, "CQ K0XYZ DM79", -5, None, 28.074)]
+    b = [antenna.Decode(T0, "CQ K0XYZ DM79", -8, None, 28.074)]
+    c = antenna.compare(antenna.match(a, b), antenna.learn_grids(a, b), "CN85on", angle)
+    assert list(c.by_takeoff) == [antenna.ES_BIN]
+    p = c.placed["K0XYZ"]
+    assert p["mode"] == "Es" and p["hops"] == 1 and p["method"] == "KC2G"
+    assert p["takeoff_deg"] < p["takeoff_300_deg"]          # one hop off 105 km is lower than off 300 km

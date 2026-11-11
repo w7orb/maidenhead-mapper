@@ -119,9 +119,11 @@ Two antennas (or receivers) decoding the same band at the same time: the same me
 
 - **By direction**: 16 wedges around your grid, coloured by the median A − B (green = A stronger, purple = B), labelled with the number of pairs and the decodes *only A* / *only B* got.
 - **By station**: one point per station heard.
-- **By distance and takeoff**: a table using the estimated F2 takeoff angle.
+- **By distance and takeoff**: a table by distance and by estimated takeoff angle.
 
-Below the decode floor the weaker antenna reports nothing rather than a low SNR, so read `decode_adv` (only A − only B, over all decodes) next to the median. In the 2022 DXCommander/loop recordings the median at 10–15° takeoff is about even, but the loop got 152 decodes the vertical missed against 42 the other way. The result is a relative pattern; trust bins with ~100 pairs or more.
+Takeoff angle is estimated, never measured. By default it uses the F2 layer height at the reflection points *at the time of each decode* (KC2G when the decodes are recent, otherwise the CCIR monthly-median model), the fewest hops off that height, and the ITU-R P.533 basic MUF. Paths of 500–2,300 km on 12m and up that F2 can't support count as sporadic-E (one hop off ~105 km) and get their own *Es* bin. Angles are worked out per station and 15 minutes, so a station's angle follows the layer through the day (`takeoff_min_deg`/`takeoff_max_deg`). The old fixed-300 km estimate stays available as an option and as `takeoff_300_deg`. Expect ±1–2° from layer-height error, and a path can use more hops than the fewest.
+
+Below the decode floor the weaker antenna reports nothing rather than a low SNR, so read `decode_adv` (only A − only B, over all decodes) next to the median. In the 2022 DXCommander/loop recordings the median at 10–15° takeoff is about even, but the loop got 222 decodes the vertical missed against 81 the other way (152 vs 42 with the fixed 300 km layer). The result is a relative pattern; trust bins with ~100 pairs or more.
 
 ### Activity timeline
 

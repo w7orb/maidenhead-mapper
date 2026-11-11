@@ -1,5 +1,6 @@
 """Processing algorithm: compare two antennas (or receivers) from their decodes."""
 
+import datetime as _dt
 import json
 from collections import Counter
 
@@ -16,6 +17,7 @@ from qgis.core import (
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingException,
+    QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
     QgsProcessingParameterMultipleLayers,
     QgsProcessingParameterNumber,
@@ -42,6 +44,11 @@ from .qt_compat import DOUBLE, INT, STRING, field
 CLASSES = [(-99, -6, "#5e3c99", "B ≥ 6 dB better"), (-6, -2, "#b2abd2", "B 2–6 dB better"),
            (-2, 2, "#f7f7f7", "about equal"), (2, 6, "#a6dba0", "A 2–6 dB better"),
            (6, 99, "#1b7837", "A ≥ 6 dB better")]
+
+
+SOURCES = ["Ionosphere: KC2G when recent, else the CCIR model", "Ionosphere: CCIR model only",
+           "Fixed 300 km layer (geometric)"]
+SRC_AUTO, SRC_MODEL, SRC_FIXED = 0, 1, 2
 
 
 def _graduated(attr, geometry):
@@ -74,6 +81,8 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
     CLIENT_B = "CLIENT_B"
     MYGRID = "MYGRID"
     RADIUS = "RADIUS"
+    SOURCE = "SOURCE"
+    R12 = "R12"
     SECTORS = "SECTORS"
     STATIONS = "STATIONS"
     TABLE = "TABLE"
@@ -109,7 +118,16 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
             "A or only B got (below the decode floor the weaker antenna reports nothing, so these "
             "counts matter as much as the median)\n"
             "• one point per station heard, with its own median and counts\n"
-            "• a table by distance and by estimated takeoff angle (F2 at 300 km)\n\n"
+            "• a table by distance and by estimated takeoff angle\n\n"
+            "Takeoff angle is estimated, never measured: from the distance, the F2 layer height at the "
+            "reflection points at the time of each decode (KC2G when the decodes are recent, else the "
+            "CCIR monthly-median model), the fewest hops off that height, and the ITU-R P.533 basic MUF. "
+            "Paths of 500–2,300 km on 12m and up that F2 can't support are taken as sporadic-E (one hop "
+            "off ~105 km) and get their own 'Es' bin. Choose 'Fixed 300 km' for the old geometric "
+            "estimate; the station layer keeps it as takeoff_300_deg either way. Angles are worked out "
+            "per station and 15 minutes, so a station's angle changes as the layer rises and falls; "
+            "takeoff_min/max_deg show the range. Expect ±1–2° from layer-height error, and a path may "
+            "really be using more hops than the fewest.\n\n"
             "The pattern is relative (A versus B), not absolute gain. Fading makes single pairs noisy: "
             "trust bins with ~100 pairs or more.")
 
@@ -127,6 +145,11 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterString(
             self.MYGRID, self.tr("My grid (where both antennas are)"), optional=True,
             defaultValue=QgsSettings().value(SETTINGS_MYGRID, "", type=str)))
+        self.addParameter(QgsProcessingParameterEnum(
+            self.SOURCE, self.tr("Takeoff angle from"), options=SOURCES, defaultValue=0))
+        self.addParameter(QgsProcessingParameterNumber(
+            self.R12, self.tr("Sunspot number R12 for the model (0 = look it up)"),
+            QgsProcessingParameterNumber.Double, defaultValue=0.0, minValue=0.0, maxValue=400.0))
         self.addParameter(QgsProcessingParameterNumber(
             self.RADIUS, self.tr("Wedge radius on the map (km)"), QgsProcessingParameterNumber.Double,
             defaultValue=2500.0, minValue=100.0, maxValue=15000.0))
@@ -167,6 +190,33 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
                                             and getattr(m, "de_grid", "")), "")
         return antenna.decodes_from_log(log, a), antenna.decodes_from_log(log, b), a, b, grid
 
+    def _angle_source(self, parameters, context, feedback, matches):
+        """(angle_at for antenna.compare or None for the fixed 300 km estimate,
+        Counter of reasons a time had no ionosphere)."""
+        choice = self.parameterAsEnum(parameters, self.SOURCE, context)
+        if choice == SRC_FIXED:
+            return None, Counter()
+        from . import ionosphere as io
+        slots = [m.slot for m in matches if isinstance(m.slot, _dt.datetime)]
+        now = _dt.datetime.now(_dt.timezone.utc)
+        recent = bool(slots) and (now - max(slots)).total_seconds() < 3 * 3600
+        mode = io.MODE_AUTO if (choice == SRC_AUTO and recent) else io.MODE_MODEL
+        try:
+            src = io.IonoSource(feedback, mode, r12=self.parameterAsDouble(parameters, self.R12, context) or None)
+        except (QgsProcessingException, OSError, ValueError) as exc:
+            feedback.pushWarning(self.tr("No ionosphere data ({}); using a fixed 300 km layer").format(exc))
+            return None, Counter()
+        notes = Counter()
+
+        def conditions_for(when):
+            cond, label, note = src.conditions(when)
+            if cond is None:
+                notes[note] += 1
+                return None, None
+            return cond, antenna.KC2G if label == "KC2G" else antenna.MODEL
+
+        return antenna.iono_angle(conditions_for), notes
+
     def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
         files_a = [p for p in self.parameterAsFileList(parameters, self.FILES_A, context) if p]
         files_b = [p for p in self.parameterAsFileList(parameters, self.FILES_B, context) if p]
@@ -186,7 +236,11 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo(self.tr("A ({}): {:,} decodes; B ({}): {:,} decodes; my grid {}").format(
             label_a, len(da), label_b, len(db), grid))
 
-        c = antenna.compare(antenna.match(da, db), antenna.learn_grids(da, db), grid)
+        matches = antenna.match(da, db)
+        angle_at, notes = self._angle_source(parameters, context, feedback, matches)
+        c = antenna.compare(matches, antenna.learn_grids(da, db), grid, angle_at)
+        for note, n in notes.items():
+            feedback.pushWarning(self.tr("{:,} station-slot(s) used the fixed 300 km layer: {}").format(n, note))
         t = c.total
         if not t.n_both:
             raise QgsProcessingException(self.tr("No message was decoded by both in the same slot. Same band, "
@@ -194,6 +248,13 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo(self.tr("Decoded by both: {:,}; only A: {:,}; only B: {:,}. Median A−B {:+.1f} dB; "
                                   "decode advantage {:+.1%}").format(t.n_both, t.only_a, t.only_b, t.median_db,
                                                                      t.decode_advantage))
+        feedback.pushInfo(self.tr("Takeoff angles: {}; modes: {}").format(
+            ", ".join(f"{k} {n:,}" for k, n in sorted(c.methods.items())) or "none",
+            ", ".join(f"{k} {n:,}" for k, n in sorted(c.modes.items())) or "none"))
+        for b in c.by_takeoff.values():
+            feedback.pushInfo("  {:<14} {:>5} pairs  +{}/{}  median {}".format(
+                b.label, b.n_both, b.only_a, b.only_b,
+                "—" if b.median_db is None else f"{b.median_db:+.1f} dB"))
         if c.unplaced:
             feedback.pushInfo(self.tr("{:,} decode(s) from stations that never sent a grid are in the totals "
                                       "but not the direction/distance bins").format(c.unplaced))
@@ -245,7 +306,9 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
         # stations
         pf = QgsFields()
         for name, kind in (("call", STRING), ("grid", STRING), ("distance_km", DOUBLE), ("bearing_deg", DOUBLE),
-                           ("takeoff_deg", DOUBLE)):
+                           ("takeoff_deg", DOUBLE), ("takeoff_min_deg", DOUBLE), ("takeoff_max_deg", DOUBLE),
+                           ("takeoff_300_deg", DOUBLE), ("hops", INT), ("hmf2_km", DOUBLE),
+                           ("angle_method", STRING), ("prop_mode", STRING)):
             pf.append(field(name, kind, 0))
         for f_ in stats_fields():
             pf.append(f_)
@@ -256,7 +319,9 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
                 feat = QgsFeature(pf)
                 feat.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(*mh.center(info["grid"]))))
                 feat.setAttributes([call, info["grid"], info["distance_km"], info["bearing_deg"],
-                                    info["takeoff_deg"]] + stats(b))
+                                    info["takeoff_deg"], info["takeoff_min_deg"], info["takeoff_max_deg"],
+                                    info["takeoff_300_deg"], info["hops"], info["hmf2_km"], info["method"],
+                                    info["mode"]] + stats(b))
                 psink.addFeature(feat, QgsFeatureSink.FastInsert)
             results[self.STATIONS] = pdest
             styling.attach_styler(context, pdest, self.tr("Antenna {} vs {} by station").format(label_a, label_b),

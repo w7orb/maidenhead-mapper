@@ -19,8 +19,10 @@
 | 12 | ~~Menu: separate sections, ionosphere on its own~~ **done** | S | Medium | — | A flat list of 8 entries with 8 identical toolbar icons; group by purpose so the ionosphere tools aren't mistaken for part of WSJT-X. |
 | 13 | Propagation model from triangle data | S (dataset) + M–L (model) | **High** (research value) | 1, 2, 5; weeks of sessions | Separates station effects from path effects; physics features (f/MUF, hops, day/night) plus per-station terms, censoring-aware; must beat distance-only and MUF-only baselines on held-out days. |
 | 14 | Antenna pattern from neighbouring receivers | M | **High** | a PSK Reporter grid query (unverified) | Your RX/TX pattern from ordinary operating, using nearby spotters (or common receivers) as the shared-path reference. |
+| 15 | Elevation pattern from A/B data: mixture fit over hop counts | M–L (research-grade) | **High** (research value) | 5, 6; days of two-receiver data across day and night | Layer height swings day/night, so one distance is heard at several angles; a fit that treats each decode as a mix of hop counts can separate gain vs elevation from distance. |
+| 16 | Reference-antenna mode for A/B | S–M | Medium–High | 6 | Load a NEC-modelled pattern (CSV of gain vs azimuth/elevation) for antenna B; A's results then come out as an absolute pattern in dBi. |
 
-**Done**: 1–10, 12. **Open**: 11 (needs weeks of data), 13 (propagation model: dataset export first), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first). **Decision pending**: basic vs operational MUF.
+**Done**: 1–10, 12. **Open**: 11 (needs weeks of data), 13 (propagation model: dataset export first), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 16 (reference-antenna mode). **Decision pending**: basic vs operational MUF.
 
 ## Details
 
@@ -57,3 +59,5 @@
     - RX pattern: your SNR minus the SNR of receivers within ~200 km that decoded the same transmission in the same minute, binned by direction, distance and estimated takeoff.
     - TX pattern: distant receivers that heard both you and a nearby transmitter in the same minute.
     - Needs PSK Reporter reports for receivers and senders near you. Check whether pskquery supports a grid-square query (callsign=CN85 with modify=grid?) and its rate limits before building.
+15. **Elevation pattern from A/B data**: takeoff is never observed, only inferred from distance, layer height and hop count. Three things make it estimable over many decodes: hmF2 swings (~230–350 km day to night) so one distance is heard at several angles; the P.533 MUF rules out some hop counts; and different distances constrain overlapping angle ranges. Model each matched decode's A − B as a weighted mix over plausible hop counts (weights from MUF and hop loss), each hop count's angle meeting a smooth gain-difference curve G(elevation), fitted by EM or least squares, per band. Handle Es (~105 km) and short/NVIS paths separately. Needs ~10,000+ matched decodes per band spread over day and night for ±1 dB in 2–3° bins. Step 1 is done: A/B bins by the ionosphere-informed angle per decode time (v0.8.1).
+16. **Reference-antenna mode**: let antenna B be a simple, well-modelled antenna (e.g. a dipole at known height) with a NEC pattern (4nec2/EZNEC export as CSV: azimuth, elevation, gain dBi). A's pattern = B's modelled gain + the measured A − B, giving absolute dBi including ground effects. Works with item 6 now and item 15 later.
