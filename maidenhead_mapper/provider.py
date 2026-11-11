@@ -7,6 +7,7 @@ from qgis.PyQt.QtGui import QIcon
 
 from .algorithms.create_grid import CreateGridAlgorithm
 from .algorithms.fetch_psk import FetchPskAlgorithm
+from .algorithms.import_adif import ImportAdifAlgorithm
 from .algorithms.import_alltxt import ImportAllTxtAlgorithm
 from .algorithms.ionosphere import CheckPathsAlgorithm, FetchIonosphereAlgorithm
 from .algorithms.antenna_alg import AntennaCompareAlgorithm
@@ -32,6 +33,7 @@ class MaidenheadProvider(QgsProcessingProvider):
         self.addAlgorithm(ImportPskAlgorithm())
         self.addAlgorithm(FetchPskAlgorithm())
         self.addAlgorithm(ImportAllTxtAlgorithm())
+        self.addAlgorithm(ImportAdifAlgorithm())
         self.addAlgorithm(FetchIonosphereAlgorithm())
         self.addAlgorithm(CheckPathsAlgorithm())
         self.addAlgorithm(SporadicEAlgorithm())

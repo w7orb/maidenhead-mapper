@@ -21,8 +21,9 @@
 | 14 | Antenna pattern from neighbouring receivers | M | **High** | a PSK Reporter grid query (unverified) | Your RX/TX pattern from ordinary operating, using nearby spotters (or common receivers) as the shared-path reference. |
 | 15 | Elevation pattern from A/B data: mixture fit over hop counts | M–L (research-grade) | **High** (research value) | 5, 6; days of two-receiver data across day and night | Layer height swings day/night, so one distance is heard at several angles; a fit that treats each decode as a mix of hop counts can separate gain vs elevation from distance. |
 | 16 | Reference-antenna mode for A/B | S–M | Medium–High | 6 | Load a NEC-modelled pattern (CSV of gain vs azimuth/elevation) for antenna B; A's results then come out as an absolute pattern in dBi. |
+| 17 | ~~Import ADIF logs~~ **done** | S | Medium–High | — | Maps your whole logging history (WSJT-X, LoTW, any logger), merges confirmations, and feeds Check paths / Station balance. |
 
-**Done**: 1–10, 12. **Open**: 11 (needs weeks of data), 13 (propagation model: dataset export first), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 16 (reference-antenna mode). **Decision pending**: basic vs operational MUF.
+**Done**: 1–10, 12, 17. **Open**: 11 (needs weeks of data), 13 (propagation model: dataset export first), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 16 (reference-antenna mode). **Decision pending**: basic vs operational MUF.
 
 ## Details
 

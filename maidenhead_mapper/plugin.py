@@ -38,6 +38,7 @@ LAYOUT = [
     ("WSJT-X", [
         ("dock", "live"),
         ("alg", "maidenhead:import_alltxt", "Import WSJT-X ALL.TXT…"),
+        ("alg", "maidenhead:import_adif", "Import ADIF log (.adi / .adx)…"),
         None,
         ("alg", "maidenhead:station_balance", "Station balance from two-way reports…"),
         ("alg", "maidenhead:antenna_compare", "Antenna A/B comparison…"),

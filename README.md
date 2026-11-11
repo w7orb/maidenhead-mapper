@@ -6,6 +6,7 @@ QGIS plugin for amateur-radio Maidenhead maps.
 - **Fetch from PSK Reporter**: downloads the last 1–24 hours of reports for a callsign into a folder, then maps the whole folder. It keeps to PSK Reporter's limit of one query per 5 minutes.
 - **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*, or from [pskreporter-analytics](https://github.com/cwtews/pskreporter-analytics)) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
 - **Import WSJT-X ALL.TXT**: replays WSJT-X logs through the live map's logic, giving station markers and exchange lines (including exchanges between other stations) for past sessions.
+- **Import ADIF log**: maps your logged QSOs from `wsjtx_log.adi`, JTDX, N1MM, LoTW or any logger's ADIF export (.adi or .adx), merging the same QSO across files.
 - **Ionosphere (KC2G)**: fetch current ionosonde data and MUF/foF2/hmF2 maps, and check any station or exchange layer against them. Each path gets its MUF, layer height, hop count and whether F2 can explain it, plus a layer of reflection points.
 - **Sporadic-E, skip distance, station balance**: find paths only sporadic-E explains (with the minimum foEs), follow the skip zone hour by hour, and compare stations' signal vs receive from two-way reports.
 - **Activity timeline**: a chart of reports per hour for any of the above (PSK Reporter, ALL.TXT, live or saved sessions). Drag across it to map only those hours.
@@ -33,7 +34,7 @@ Everything is under *Plugins → Maidenhead Mapper* (and the toolbar button's dr
 |---|---|
 | Grid | Create Maidenhead grid |
 | PSK Reporter | Fetch from PSK Reporter, Import PSK Reporter reports |
-| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Station balance from two-way reports, Antenna A/B comparison |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Import ADIF log, Station balance from two-way reports, Antenna A/B comparison |
 | Ionosphere | Fetch ionosphere (KC2G), Check paths against the ionosphere (MUF), Find sporadic-E paths, Skip distance by hour |
 | (top level) | Activity timeline (panel) |
 
@@ -71,6 +72,16 @@ The ionosphere tools take any station or exchange layer; they aren't tied to the
 - **ALL.TXT file(s)**: one or more logs (WSJT-X 2.1+ format). Don't mix two receivers' logs from the same time; that counts everything twice.
 - **My callsign / grid**: your callsign marks your own QSOs, and ALL.TXT `Tx` lines fill in your side of them. Your grid is used for distance, bearing and hops.
 - Outputs two layers: **WSJT-X stations (ALL.TXT)** and **WSJT-X exchanges (ALL.TXT)**, with the same fields and colours as the live map (no fading).
+
+### Import ADIF log
+
+*Plugins → Maidenhead Mapper → WSJT-X → Import ADIF log (.adi / .adx)…*
+
+- **ADIF file(s)**: WSJT-X writes `wsjtx_log.adi` next to `ALL.TXT` (*File → Open log directory*). Any logger's ADIF export or a LoTW download works too. The same QSO in several files (same call, band and mode within 5 minutes) is merged, keeping every confirmation.
+- **Only QSOs made as this callsign**: for logs holding several of your calls; empty keeps all.
+- **My grid**: used when a QSO has no `MY_GRIDSQUARE`.
+- Their location is `GRIDSQUARE`, else the first `VUCC_GRIDS`, else `LAT`/`LON`.
+- Outputs **Worked stations (ADIF)**: one marker per callsign with QSO count, bands, modes, best reports both ways and confirmations; and **QSOs (ADIF)**: one line per QSO, coloured by band. The QSO lines have the same fields as the exchanges layer (you are `call_a`; `a_hears_b` is the report you sent, `b_hears_a` the one you received), so *Check paths*, *Station balance*, *Find sporadic-E paths* and *Skip distance* work on them. Reports are numbers for digital modes only; phone/CW RST is kept as text in `rst_sent`/`rst_rcvd`.
 
 ### Ionosphere: fetch and check paths
 
