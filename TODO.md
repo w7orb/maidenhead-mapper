@@ -8,7 +8,7 @@
 | 1 | ~~Import WSJT-X ALL.TXT~~ **done** | S | **High** | — | The exchange tracker and an ALL.TXT reader already exist. Maps all your past logs and unlocks 6 and 7. |
 | 2 | ~~Save live sessions automatically~~ **done** | S–M | Medium | — | Protects data; the work is appending to a GeoPackage safely and picking up again after a restart. |
 | 3 | ~~Timeline for live layers~~ **done** | M | Medium | — | The live model keeps per-station totals, not each decode, so it needs a decode history and a different rebuild that works with fading. |
-| 4 | ~~Hop geometry and takeoff angle~~ **done** | S–M | Medium (High with 5) | — | Pure maths and new fields. With assumed heights, hop counts stay ambiguous. |
+| 4 | Hop geometry and takeoff angle: **partly done** (`hops`, `takeoff_deg`) | S for the rest | Medium (High with 5) | — | Left: reflection-point fields and layer, ruling out hop counts with the MUF (needs 5). |
 | 5 | Ionosonde / model enrichment | M–L | **High** | — | Fetching, sampling maps at reflection points, matching times. No historical API for measured data; PyIRI adds a numpy dependency (bundled with QGIS, but optional). |
 | 6 | Antenna A/B comparison | S (after 1) | **High** | 1 (4 for angles) | Already prototyped on your data. Practical and unusual: most hams can't measure this today. |
 | 7 | Station balance from exchanges | M | Medium | 1 helps | Least-squares fit plus confidence. Needs about 100+ exchanges per station, so value grows with data. |
@@ -17,14 +17,14 @@
 | 10 | Skip distance and hop structure over time | M | Medium | 3 for live data | Stats plus a chart in the timeline; shows changes, not absolute values. |
 | 11 | Band hotter/colder than usual | M | Low–Medium | 2, regular fetches | Needs weeks of collected data before it says anything; modest accuracy (r ≈ 0.3). |
 
-**Done 2026-11-11**: 1, 2, 3, 4. **Suggested next**: 6 → 5 → 8. These are quick, high-value items, each building on the previous one. Then 2 and 3 for the live side, and 7, 9, 10 and 11 as data accumulates.
+**Done 2026-11-11**: 1, 2, 3, and the first part of 4. **Suggested next**: 6 → rest of 4 → 5 → 8. Then 7, 9, 10 and 11 as data accumulates.
 
 ## Details
 
 1. **Import WSJT-X ALL.TXT**: a Processing tool that runs a folder of `ALL.TXT` files through the same exchange tracker as the live map. Output is an exchanges line layer and a station point layer for past sessions, filterable by band and time.
 2. **Save live sessions automatically**: write live stations and exchanges to a GeoPackage as they arrive, so a session survives closing QGIS. Today it only survives if you use *Make Permanent* by hand.
 3. **Activity timeline for the live layers**: reports per hour and window selection for *WSJT-X live* and *WSJT-X exchanges*, not only PSK Reporter layers.
-4. **Hop geometry and takeoff angle**: for each path (PSK Reporter and exchanges), use distance and an assumed or measured layer height to list the possible hop counts. Rule some out using the MUF and a realistic takeoff-angle range (about 2–35°). Add fields `hops_likely`, `takeoff_deg`, and `reflection_lat`/`reflection_lon` at each hop's midpoint, plus a reflection-point layer. Keep the geometry in pure Python with tests.
+4. **Hop geometry and takeoff angle**: for each path (PSK Reporter and exchanges), use distance and an assumed or measured layer height to list the possible hop counts. Rule some out using the MUF and a realistic takeoff-angle range (about 2–35°). Add fields `hops_likely`, `takeoff_deg`, and `reflection_lat`/`reflection_lon` at each hop's midpoint, plus a reflection-point layer. Keep the geometry in pure Python with tests. *Done:* `core/hops.py` (with `reflection_points()`), plus `hops` and `takeoff_deg` on every layer. *Left:* reflection lat/lon fields, the reflection-point layer, and the MUF rule-out.
 5. **Ionosonde / model enrichment**: fetch measured layer height (hmF2), critical frequency (foF2) and the propagation factor M(3000)F2 for each path's reflection points and time. Sources, checked 2026-11-11:
    - KC2G `https://prop.kc2g.com/api/stations.json`: foF2, hmF2, MUF(3000) and foEs per ionosonde, with a confidence score.
    - KC2G `https://prop.kc2g.com/renders/current/mufd-normal-now.geojson` and `fof2-normal-now.geojson`: contour maps that load straight into QGIS.

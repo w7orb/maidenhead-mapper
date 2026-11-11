@@ -37,7 +37,6 @@ FIELDS = [
 
 # (filter, label, colour, width mm, dash pattern or None); first match wins
 STYLES = [
-    ("\"involves_me\" = 1", "My QSO", "#d62728", 0.9, None),
     (f"\"stage\" = '{x.CONFIRMED}'", "Confirmed (both reports + sign-off)", "#2ca02c", 0.7, None),
     (f"\"stage\" = '{x.BOTH_REPORTS}'", "Both reports", "#1f77b4", 0.55, None),
     (f"\"stage\" = '{x.ONE_REPORT}'", "One report", "#9467bd", 0.4, "3;2"),
