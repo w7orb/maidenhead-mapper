@@ -50,6 +50,7 @@ def station_fields():
         ("bands", STRING, 80), ("modes", STRING, 40),
         ("first_utc", DATETIME, 0), ("last_utc", DATETIME, 0),
         ("distance_km", DOUBLE, 0), ("bearing_deg", DOUBLE, 0), ("source", STRING, 10),
+        ("hops", INT, 0), ("takeoff_deg", DOUBLE, 0),
     ]:
         f.append(field(name, kind, length))
     return f
@@ -61,7 +62,7 @@ def station_feature(fields, s):
     feat.setAttributes([
         s.call, s.grid, s.direction, s.reports, s.snr_best, s.snr_median, s.snr_last,
         s.bands, s.modes, utc_qdatetime(s.first_utc), utc_qdatetime(s.last_utc),
-        s.distance_km, s.bearing_deg, s.source,
+        s.distance_km, s.bearing_deg, s.source, s.hops, s.takeoff_deg,
     ])
     return feat
 

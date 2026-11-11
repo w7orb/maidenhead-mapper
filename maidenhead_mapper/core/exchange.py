@@ -104,11 +104,13 @@ class ExchangeTracker:
     # -------------------------------------------------------------- input
     def on_decode(self, parsed, snr, band, mode, now):
         """A decoded message (ft8msg.Parsed) heard at `snr` dB. Returns the
-        Exchange it joined, or None for CQs and undirected messages."""
+        Exchange it joined, or None for CQs and undirected messages.
+        snr=None for my own transmissions (ALL.TXT Tx lines)."""
         if parsed is None or parsed.is_cq or not parsed.to or parsed.to == parsed.sender:
             return None
         ex = self._get(parsed.sender, parsed.to, band, mode, now)
-        ex.set_my_snr(parsed.sender, snr)
+        if snr is not None:
+            ex.set_my_snr(parsed.sender, snr)
         if parsed.report is not None:
             ex.set_report(parsed.sender, parsed.report)
         if parsed.signoff:

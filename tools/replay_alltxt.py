@@ -19,24 +19,13 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+from maidenhead_mapper.core import alltxt  # noqa: E402
 from maidenhead_mapper.core import wsjtx_udp as w  # noqa: E402
 
 
 def read_lines(paths):
-    rows = []
-    for path in paths:
-        with open(path, encoding="utf-8", errors="replace") as f:
-            for line in f:
-                p = line.split(None, 7)
-                if len(p) < 8 or p[2] != "Rx":
-                    continue
-                try:
-                    t = dt.datetime.strptime(p[0], "%y%m%d_%H%M%S").replace(tzinfo=dt.timezone.utc)
-                    rows.append((t, float(p[1]), p[3], int(p[4]), float(p[5]), int(p[6]), p[7].strip()))
-                except ValueError:
-                    continue
-    rows.sort(key=lambda r: r[0])
-    return rows
+    """Received lines as (time, MHz, mode, snr, dt, df, message), sorted by time."""
+    return [(r.time, r.mhz, r.mode, r.snr, r.dt, r.df, r.message) for r in alltxt.read(paths) if r.rxtx == "Rx"]
 
 
 def main():

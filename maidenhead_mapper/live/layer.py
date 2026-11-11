@@ -17,6 +17,7 @@ from qgis.core import (
 from ..algorithms import styling
 from ..algorithms.import_psk import station_fields
 from ..algorithms.qt_compat import INT, utc_qdatetime
+from ..core import hops as _hops
 from ..core import maidenhead as mh
 
 LAYER_NAME = "WSJT-X live"
@@ -48,6 +49,31 @@ def live_renderer(fade_minutes):
     return QgsRuleBasedRenderer(root)
 
 
+def live_station_fields():
+    """Station fields plus called_me (live and ALL.TXT layers)."""
+    fields = station_fields()
+    fields.append(QgsField("called_me", INT))
+    return fields
+
+
+def live_station_attrs(model, st):
+    """Attribute list for a LiveModel StationState, matching live_station_fields()."""
+    dist, bear = model.distance_bearing(st.grid)
+    n, takeoff = _hops.likely_hops(dist)
+    return [
+        st.call, st.grid, st.direction, st.reports, st.snr_best, None, st.snr_last,
+        st.bands_str(), ",".join(sorted(st.modes)),
+        utc_qdatetime(st.first_utc) if st.first_utc else None,
+        utc_qdatetime(st.last_utc) if st.last_utc else None,
+        dist, bear, "live", n, takeoff, st.called_me,
+    ]
+
+
+def station_point(st):
+    lon, lat = mh.center(st.grid)
+    return QgsGeometry.fromPointXY(QgsPointXY(lon, lat))
+
+
 class LiveLayer:
     """Owns the live layer and applies batches of changed stations to it."""
 
@@ -59,9 +85,7 @@ class LiveLayer:
 
     def _create(self):
         layer = QgsVectorLayer("Point?crs=EPSG:4326", LAYER_NAME, "memory")
-        fields = station_fields()
-        fields.append(QgsField("called_me", INT))
-        layer.dataProvider().addAttributes(list(fields))
+        layer.dataProvider().addAttributes(list(live_station_fields()))
         layer.updateFields()
         layer.setRenderer(live_renderer(self.fade_minutes))
         layer.setLabeling(styling.callsign_labels())
@@ -81,16 +105,6 @@ class LiveLayer:
             self.layer.setRenderer(live_renderer(minutes))
             self.layer.triggerRepaint()
 
-    def _attrs(self, st):
-        dist, bear = self.model.distance_bearing(st.grid)
-        return [
-            st.call, st.grid, st.direction, st.reports, st.snr_best, None, st.snr_last,
-            st.bands_str(), ",".join(sorted(st.modes)),
-            utc_qdatetime(st.first_utc) if st.first_utc else None,
-            utc_qdatetime(st.last_utc) if st.last_utc else None,
-            dist, bear, "live", st.called_me,
-        ]
-
     def sync(self, keys):
         """Apply changed stations; returns the number of features touched."""
         if self.layer is None:
@@ -101,9 +115,8 @@ class LiveLayer:
             st = self.model.stations.get(key)
             if st is None or not st.grid:
                 continue
-            lon, lat = mh.center(st.grid)
-            geom = QgsGeometry.fromPointXY(QgsPointXY(lon, lat))
-            attrs = self._attrs(st)
+            geom = station_point(st)
+            attrs = live_station_attrs(self.model, st)
             fid = self.fids.get(key)
             if fid is None:
                 f = QgsFeature(self.layer.fields())

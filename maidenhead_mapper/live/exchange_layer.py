@@ -21,6 +21,7 @@ from qgis.PyQt.QtGui import QColor
 
 from ..algorithms.qt_compat import DATETIME, DOUBLE, INT, STRING, field, utc_qdatetime
 from ..core import exchange as x
+from ..core import hops as _hops
 from ..core import maidenhead as mh
 from .layer import _OPACITY
 
@@ -32,6 +33,7 @@ FIELDS = [
     ("a_hears_b", INT, 0), ("b_hears_a", INT, 0), ("me_hears_a", INT, 0), ("me_hears_b", INT, 0),
     ("paths", STRING, 80), ("involves_me", INT, 0), ("logged", INT, 0), ("messages", INT, 0),
     ("transcript", STRING, 254), ("first_utc", DATETIME, 0), ("last_utc", DATETIME, 0), ("distance_km", DOUBLE, 0),
+    ("hops", INT, 0), ("takeoff_deg", DOUBLE, 0),
 ]
 
 # (filter, label, colour, width mm, dash pattern or None); first match wins
@@ -95,6 +97,49 @@ def paths_text(ex):
     return "  ".join(parts) or f"{ex.a} – {ex.b}"
 
 
+def exchange_fields():
+    fields = QgsFields()
+    for name, kind, length in FIELDS:
+        fields.append(field(name, kind, length))
+    return fields
+
+
+def exchange_geometry(ga, gb):
+    """Great-circle MultiLineString between two grid centres."""
+    (lon1, lat1), (lon2, lat2) = mh.center(ga), mh.center(gb)
+    parts = mh.great_circle(lon1, lat1, lon2, lat2)
+    return QgsGeometry.fromMultiPolylineXY([[QgsPointXY(lon, lat) for lon, lat in p] for p in parts])
+
+
+def exchange_attrs(ex, ga, gb):
+    dist = round(mh.distance_bearing(ga, gb)[0], 1)
+    n, takeoff = _hops.likely_hops(dist)
+    return [
+        ex.id, ex.a, ga, ex.b, gb, ex.band, ex.mode, ex.stage,
+        ex.a_hears_b, ex.b_hears_a, ex.me_hears_a, ex.me_hears_b,
+        paths_text(ex), int(ex.involves_me), int(ex.logged), ex.messages, ex.transcript()[:254],
+        utc_qdatetime(ex.first_utc) if ex.first_utc else None,
+        utc_qdatetime(ex.last_utc) if ex.last_utc else None,
+        dist, n, takeoff,
+    ]
+
+
+def exchange_features(model):
+    """(features, unplaced count) for every exchange in a LiveModel with both grids known."""
+    fields = exchange_fields()
+    out, unplaced = [], 0
+    for ex in model.exchanges.exchanges.values():
+        ga, gb = model.grid_of(ex.a), model.grid_of(ex.b)
+        if not (ga and gb):
+            unplaced += 1
+            continue
+        f = QgsFeature(fields)
+        f.setGeometry(exchange_geometry(ga, gb))
+        f.setAttributes(exchange_attrs(ex, ga, gb))
+        out.append(f)
+    return out, unplaced
+
+
 class ExchangeLayer:
     """Owns the exchanges layer; draws an exchange once both grids are known."""
 
@@ -107,10 +152,7 @@ class ExchangeLayer:
 
     def _create(self):
         layer = QgsVectorLayer("MultiLineString?crs=EPSG:4326", LAYER_NAME, "memory")
-        fields = QgsFields()
-        for name, kind, length in FIELDS:
-            fields.append(field(name, kind, length))
-        layer.dataProvider().addAttributes(list(fields))
+        layer.dataProvider().addAttributes(list(exchange_fields()))
         layer.updateFields()
         layer.setRenderer(renderer(self.fade_minutes))
         layer.setLabeling(labels())
@@ -132,22 +174,6 @@ class ExchangeLayer:
     def placed_count(self):
         return len(self.fids)
 
-    def _geometry(self, ga, gb):
-        (lon1, lat1), (lon2, lat2) = mh.center(ga), mh.center(gb)
-        parts = mh.great_circle(lon1, lat1, lon2, lat2)
-        return QgsGeometry.fromMultiPolylineXY([[QgsPointXY(lon, lat) for lon, lat in p] for p in parts])
-
-    def _attrs(self, ex, ga, gb):
-        dist = round(mh.distance_bearing(ga, gb)[0], 1)
-        return [
-            ex.id, ex.a, ga, ex.b, gb, ex.band, ex.mode, ex.stage,
-            ex.a_hears_b, ex.b_hears_a, ex.me_hears_a, ex.me_hears_b,
-            paths_text(ex), int(ex.involves_me), int(ex.logged), ex.messages, ex.transcript()[:254],
-            utc_qdatetime(ex.first_utc) if ex.first_utc else None,
-            utc_qdatetime(ex.last_utc) if ex.last_utc else None,
-            dist,
-        ]
-
     def sync(self, ids):
         """Apply changed exchanges (plus any still waiting for a grid)."""
         ids = set(ids) | self.unplaced
@@ -166,7 +192,7 @@ class ExchangeLayer:
                 self.unplaced.add(i)
                 continue
             self.unplaced.discard(i)
-            geom, attrs = self._geometry(ga, gb), self._attrs(ex, ga, gb)
+            geom, attrs = exchange_geometry(ga, gb), exchange_attrs(ex, ga, gb)
             fid = self.fids.get(i)
             if fid is None:
                 f = QgsFeature(self.layer.fields())

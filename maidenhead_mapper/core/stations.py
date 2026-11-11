@@ -13,6 +13,7 @@ from dataclasses import dataclass, fields
 from datetime import datetime
 from typing import List, Optional, Tuple
 
+from . import hops as _hops
 from . import maidenhead as mh
 from .bands import BAND_NAMES, band_for_hz
 
@@ -38,6 +39,9 @@ class StationSummary:
     source: str
     lon: float
     lat: float
+    hops: Optional[int] = None          # likely F2 hop count from my grid (core.hops)
+    takeoff_deg: Optional[float] = None
+
 
 
 FIELD_NAMES = [f.name for f in fields(StationSummary) if f.name not in ("lon", "lat")]
@@ -150,6 +154,7 @@ def summarize(reports, precision: int = mh.SUBSQUARE, my_grid: Optional[str] = N
             dist, bear = mh.distance_bearing(my_grid, grid)
             dist, bear = round(dist, 1), round(bear, 1)
         snrs = [s for s in (_number(r.get("sNR")) for r in g) if s is not None]
+        n_hops, takeoff = _hops.likely_hops(dist)
         bands_seen = sorted({b for b in map(band_of, g) if b}, key=_band_order)
         modes = sorted({r["mode"] for r in g if isinstance(r.get("mode"), str)})
         out.append(StationSummary(
@@ -160,6 +165,7 @@ def summarize(reports, precision: int = mh.SUBSQUARE, my_grid: Optional[str] = N
             bands=",".join(bands_seen), modes=",".join(modes),
             first_utc=g[0]["time"], last_utc=g[-1]["time"],
             distance_km=dist, bearing_deg=bear, source=source, lon=lon, lat=lat,
+            hops=n_hops, takeoff_deg=takeoff,
         ))
     stats.stations = len(out)
     return out, stats
