@@ -6,6 +6,9 @@ It keeps one StationState per (callsign, direction):
     heard   every station decoded (the message's sender)
     worked  stations logged via QSO Logged
 
+and an ExchangeTracker (`exchanges`) that pairs directed messages into
+exchanges between any two stations, with the reports each side sent.
+
 A station is only *placed* once its grid is known: from the message
 itself, or remembered from an earlier message (grid cache). Until then it
 is counted as waiting. `take_dirty()` returns the keys changed since the
@@ -17,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Dict, Optional, Set, Tuple
 
 from . import ft8msg
+from .exchange import ExchangeTracker
 from . import maidenhead as mh
 from . import wsjtx_udp as w
 from .bands import BAND_NAMES, band_for_hz
@@ -67,6 +71,7 @@ class LiveModel:
         self.decodes = 0
         self.last_packet: Optional[_dt.datetime] = None
         self._dirty: Set[Key] = set()
+        self.exchanges = ExchangeTracker(self.my_call)
 
     # -------------------------------------------------------------- input
     def handle(self, msg, now: Optional[_dt.datetime] = None):
@@ -84,9 +89,15 @@ class LiveModel:
             client.dial_hz, client.mode = msg.dial_hz, msg.mode
             client.de_call, client.de_grid = msg.de_call.upper(), msg.de_grid
             if client.de_call and not self.my_call:
-                self.my_call = client.de_call
+                self.my_call = self.exchanges.my_call = client.de_call
             if mh.is_valid(client.de_grid) and not self.my_grid:
                 self.my_grid = client.de_grid
+            if client.de_call and mh.is_valid(client.de_grid):
+                self._learn_grid(_base(client.de_call), client.de_grid)  # each WSJT-X's own station
+            if msg.dx_call and mh.is_valid(msg.dx_grid or ""):
+                self._learn_grid(msg.dx_call.upper(), msg.dx_grid)
+            self.exchanges.on_my_status(msg.dx_call, msg.report, msg.transmitting,
+                                        _band(client), client.mode, now)
         elif isinstance(msg, w.Decode):
             self._on_decode(msg, client, now)
         elif isinstance(msg, w.QsoLogged):
@@ -117,6 +128,7 @@ class LiveModel:
         if self.my_call and p.to and _base(p.to) == _base(self.my_call):
             st.called_me += 1
         self._dirty.add((st.call, st.direction))
+        self.exchanges.on_decode(p, msg.snr, band, mode, now)
 
     def _on_logged(self, msg, now):
         call = ft8msg.clean_call(msg.dx_call)
@@ -140,6 +152,7 @@ class LiveModel:
         except (TypeError, ValueError):
             pass
         self._dirty.add((st.call, st.direction))
+        self.exchanges.on_logged(call, msg.report_sent, msg.report_rcvd, band, msg.mode, when)
 
     def _learn_grid(self, call, grid):
         """Remember a grid; a finer or changed grid updates every row for that call."""
@@ -174,11 +187,19 @@ class LiveModel:
     def waiting_count(self):
         return sum(1 for s in self.stations.values() if not s.grid)
 
+    def grid_of(self, call):
+        """Best known grid for a callsign (exact, then base call), or None."""
+        return self.grid_cache.get(call) or self.grid_cache.get(_base(call))
+
     def distance_bearing(self, grid):
         if not (self.my_grid and grid):
             return None, None
         d, b = mh.distance_bearing(self.my_grid, grid)
         return round(d, 1), round(b, 1)
+
+
+def _band(client):
+    return band_for_hz(client.dial_hz) if client.dial_hz else None
 
 
 def _base(call):

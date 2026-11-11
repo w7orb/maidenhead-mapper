@@ -115,3 +115,15 @@ def test_truncate():
 @pytest.mark.parametrize("bad", ["CN85pl1", "CN85pl1a", "CN85plaa", "CN85pl12a", "CN85pl12yz", "CN85pl12ab1"])
 def test_invalid_extended(bad):
     assert not mh.is_valid(bad)
+
+
+def test_great_circle():
+    (part,) = mh.great_circle(-122.6, 45.5, -71.0, 42.4)        # Portland -> Boston
+    assert part[0] == (-122.6, 45.5) and part[-1] == (-71.0, 42.4)
+    assert max(lat for _, lat in part) > 46                      # bows north of both ends
+    parts = mh.great_circle(-122.6, 45.5, 139.7, 35.7)           # Portland -> Tokyo crosses 180
+    assert len(parts) == 2
+    assert parts[0][-1][0] == -180.0 and parts[1][0][0] == 180.0
+    assert parts[0][-1][1] == parts[1][0][1]
+    assert all(abs(x) <= 180 for p in parts for x, _ in p)
+    assert mh.great_circle(1, 2, 1, 2) == [[(1, 2), (1, 2)]]

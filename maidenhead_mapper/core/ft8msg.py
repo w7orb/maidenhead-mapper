@@ -10,6 +10,10 @@ Standard message shapes (WSJT-X 77-bit):
 The sender is the second callsign (or the one after CQ [modifier]). 'RR73'
 looks like a grid square but is a sign-off; it is never treated as a grid.
 Free-text and telemetry messages return None.
+
+Directed messages also carry the exchange step: a signal report ('-12', or
+'R-12' as an acknowledgement) is how the *sender* hears the *addressee*, in
+dB; 'RR73', 'RRR' and '73' sign off.
 """
 
 import re
@@ -20,6 +24,8 @@ _GRID4 = re.compile(r"^[A-R]{2}[0-9]{2}$")
 # A callsign: letters/digits with at least one digit and one letter, optional /affixes.
 _CALL = re.compile(r"^(?=[A-Z0-9/]*[0-9])(?=[A-Z0-9/]*[A-Z])[A-Z0-9]{1,4}(?:/?[A-Z0-9]{1,6})*(?:/[A-Z0-9]{1,4})?$")
 _NOT_GRIDS = {"RR73"}
+_REPORT = re.compile(r"^(R)?([+-]\d{2})$")
+SIGNOFFS = ("RR73", "RRR", "73")
 
 
 @dataclass
@@ -28,6 +34,9 @@ class Parsed:
     to: Optional[str]           # addressee, None for CQ
     grid: Optional[str]         # 4-char grid if the message carries one
     is_cq: bool
+    report: Optional[int] = None    # dB: how the sender hears the addressee
+    roger: bool = False             # 'R' acknowledgement ('R-12', 'R FN42', 'RRR', 'RR73')
+    signoff: Optional[str] = None   # 'RR73' | 'RRR' | '73'
 
 
 def clean_call(token: str) -> Optional[str]:
@@ -70,7 +79,16 @@ def parse_message(message: str) -> Optional[Parsed]:
     if sender is None:
         return None
     tail = words[2:]
+    roger = False
     if tail and tail[0] == "R" and len(tail) > 1:
-        tail = tail[1:]
+        tail, roger = tail[1:], True
     grid = tail[0] if tail and is_grid(tail[0]) else None
-    return Parsed(sender, to, grid, False)
+    report = signoff = None
+    if len(tail) == 1 and grid is None:
+        m = _REPORT.match(tail[0])
+        if m:
+            report, roger = int(m.group(2)), roger or bool(m.group(1))
+        elif tail[0] in SIGNOFFS:
+            signoff = tail[0]
+            roger = roger or tail[0] != "73"
+    return Parsed(sender, to, grid, False, report, roger, signoff)

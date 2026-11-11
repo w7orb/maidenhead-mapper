@@ -18,6 +18,8 @@ from qgis.PyQt.QtWidgets import (
 
 from ..core.bands import band_for_hz
 from ..core.live import LiveModel
+from ..core import exchange as x
+from .exchange_layer import ExchangeLayer
 from .layer import LiveLayer
 from .listener import WsjtxListener
 
@@ -35,15 +37,21 @@ class LiveController:
         self.listener = WsjtxListener()
         self.listener.message.connect(self._on_message)
         self.layer = LiveLayer(self.model)
+        self.exchange_layer = ExchangeLayer(self.model)
         self.batch = QTimer()
         self.batch.timeout.connect(self.flush)
         self.fader = QTimer()
         self.fader.timeout.connect(self.layer.repaint)
+        self.fader.timeout.connect(self.exchange_layer.repaint)
         self.decode_times = []
         self.on_update = None  # callback for the dock's status
 
+    def set_fade(self, minutes):
+        self.layer.set_fade(minutes)
+        self.exchange_layer.set_fade(minutes)
+
     def start(self, address, port, multicast, fade_minutes):
-        self.layer.set_fade(fade_minutes)
+        self.set_fade(fade_minutes)
         self.listener.start(address, port, multicast)
         self.batch.start(BATCH_MS)
         self.fader.start(REPAINT_MS)
@@ -65,6 +73,9 @@ class LiveController:
         keys = self.model.take_dirty()
         if keys:
             self.layer.sync(keys)
+        ids = self.model.exchanges.take_dirty()
+        if ids or self.exchange_layer.unplaced:
+            self.exchange_layer.sync(ids)
         if self.on_update:
             self.on_update()
 
@@ -97,7 +108,7 @@ class LiveDock(QDockWidget):
         self.fade.setRange(1, 24 * 60)
         self.fade.setSuffix(" min")
         self.fade.setValue(int(s.value(S + "fade", DEFAULTS["fade"])))
-        self.fade.valueChanged.connect(lambda v: self.ctl.layer.set_fade(v))
+        self.fade.valueChanged.connect(self.ctl.set_fade)
         form.addRow("Mode", self.mode)
         form.addRow("Address", self.address)
         form.addRow("Port", self.port)
@@ -167,6 +178,13 @@ class LiveDock(QDockWidget):
             lines.append(f"{cl.id} {cl.version}: {dial} {cl.mode} ({band}), {cl.de_call} {cl.de_grid}")
         lines.append(f"Decodes: {m.decodes} ({c.decodes_per_minute()}/min)")
         lines.append(f"Stations on map: {m.placed_count()}; waiting for a grid: {m.waiting_count()}")
+        ex = m.exchanges
+        if ex.exchanges:
+            n = ex.counts()
+            mine = sum(1 for e in ex.exchanges.values() if e.involves_me)
+            lines.append(f"Exchanges: {len(ex.exchanges)} ({c.exchange_layer.placed_count()} on map): "
+                         f"{n[x.CONFIRMED]} confirmed, {n[x.BOTH_REPORTS]} both reports, "
+                         f"{n[x.ONE_REPORT]} one report, {n[x.STARTED]} started; {mine} mine")
         if m.last_packet:
             lines.append(f"Last packet: {m.last_packet.strftime('%H:%M:%S')} UTC")
         if c.listener.bad_datagrams:

@@ -144,3 +144,38 @@ def distance_bearing(from_locator: str, to_locator_: str) -> Tuple[float, float]
     x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dlon)
     bearing = (math.degrees(math.atan2(y, x)) + 360.0) % 360.0
     return dist, bearing
+
+
+def great_circle(lon1: float, lat1: float, lon2: float, lat2: float, segments: int = 32):
+    """Points along the great circle between two points, as a list of parts.
+
+    Each part is a list of (lon, lat). There are two parts when the path
+    crosses the antimeridian, so it doesn't streak across the whole map.
+    """
+    p1, l1, p2, l2 = map(math.radians, (lat1, lon1, lat2, lon2))
+    d = 2 * math.asin(math.sqrt(math.sin((p2 - p1) / 2) ** 2
+                                + math.cos(p1) * math.cos(p2) * math.sin((l2 - l1) / 2) ** 2))
+    if d < 1e-9:
+        return [[(lon1, lat1), (lon2, lat2)]]
+    pts = []
+    for i in range(segments + 1):
+        f = i / segments
+        a, b = math.sin((1 - f) * d) / math.sin(d), math.sin(f * d) / math.sin(d)
+        x = a * math.cos(p1) * math.cos(l1) + b * math.cos(p2) * math.cos(l2)
+        y = a * math.cos(p1) * math.sin(l1) + b * math.cos(p2) * math.sin(l2)
+        z = a * math.sin(p1) + b * math.sin(p2)
+        pts.append((math.degrees(math.atan2(y, x)), math.degrees(math.atan2(z, math.hypot(x, y)))))
+    pts[0], pts[-1] = (lon1, lat1), (lon2, lat2)
+    parts, part = [], [pts[0]]
+    for (xa, ya), (xb, yb) in zip(pts, pts[1:]):
+        if abs(xb - xa) > 180:  # crossing: interpolate the latitude at +/-180
+            edge = 180.0 if xa > 0 else -180.0
+            xb_unwrapped = xb + (360 if xa > 0 else -360)
+            t = (edge - xa) / (xb_unwrapped - xa)
+            ym = ya + t * (yb - ya)
+            part.append((edge, ym))
+            parts.append(part)
+            part = [(-edge, ym)]
+        part.append((xb, yb))
+    parts.append(part)
+    return parts

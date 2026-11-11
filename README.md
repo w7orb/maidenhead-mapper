@@ -77,6 +77,18 @@ With only WSJT-X and QGIS, *Unicast* on `127.0.0.1:2237` (the WSJT-X default) al
 - The band comes from WSJT-X's dial frequency. Colour shows best SNR. Opacity fades from 100% to 15% over the *Fade over* time.
 - Logging a QSO in WSJT-X adds a red star for that station, which never fades.
 - `called_me` counts messages from that station addressed to your call.
+- **Exchanges between any two stations** go on a second layer, *WSJT-X exchanges*: one great-circle line per exchange between the two grids. FT8 reports say how the *sender* hears the *addressee*, so a full exchange gives the SNR both ways, and your decodes add how you hear each side:
+
+  ```
+  AH6U N5ER EM34     N5ER answers AH6U                 (you hear N5ER -12)
+  N5ER AH6U +07      AH6U hears N5ER at +07            (you hear AH6U -13)
+  AH6U N5ER R-04     N5ER hears AH6U at -04
+  N5ER AH6U RR73     signed off: confirmed
+  ```
+
+  Fields: `a_hears_b`, `b_hears_a` (reports exchanged), `me_hears_a`, `me_hears_b` (your decodes), `stage` (started / one report / both reports / confirmed), `paths` (label, e.g. `N5ER→AH6U +07  AH6U→N5ER -04`, read as "signal from → to, arrived at"), `transcript`, `band`, `distance_km`. Messages between the same pair and band within 3 minutes belong to one exchange.
+- Colours: red = your QSOs (your side comes from WSJT-X's Status and QSO Logged, since your own transmissions aren't decoded), green = confirmed, blue = both reports, dashed purple = one report, dotted grey = started. Lines fade like markers; report labels appear when zoomed in past 1:10M.
+- A line is drawn once both stations' grids are known. FT8 only sends grids when calling or answering, so some exchanges wait; the panel shows how many are on the map.
 - The layer *WSJT-X live* is temporary. Use right-click → *Make Permanent* to save a session. If you delete it, it is rebuilt on the next update.
 
 **Testing without a radio**: replay a recorded `ALL.TXT` as live packets:

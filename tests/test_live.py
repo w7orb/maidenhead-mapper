@@ -136,3 +136,28 @@ def test_close_forgets_client_and_none_ignored():
     feed(m, w.encode_heartbeat("A"), w.encode_heartbeat("B"), w.encode_close("A"))
     assert set(m.clients) == {"B"}
     assert m.handle(None) is False
+
+
+def test_status_grid_belongs_to_that_clients_call():
+    import datetime as dt
+    from maidenhead_mapper.core import live, wsjtx_udp as w
+    m = live.LiveModel()
+    now = dt.datetime(2026, 11, 11, tzinfo=dt.timezone.utc)
+    m.handle(w.parse(w.encode_status("real", 14074000, "FT8", de_call="W7ORB", de_grid="CN85on")), now)
+    m.handle(w.parse(w.encode_status("replay", 28074000, "FT8", de_call="N0CALL", de_grid="AA00")), now)
+    assert m.my_call == "W7ORB"
+    assert m.grid_of("W7ORB") == "CN85on" and m.grid_of("N0CALL") == "AA00"
+
+
+def test_live_model_builds_exchanges():
+    import datetime as dt
+    from maidenhead_mapper.core import exchange, live, wsjtx_udp as w
+    m = live.LiveModel()
+    t = dt.datetime(2026, 11, 11, tzinfo=dt.timezone.utc)
+    m.handle(w.parse(w.encode_status("c", 28074000, "FT8", de_call="W7ORB", de_grid="CN85")), t)
+    for i, (msg, snr) in enumerate([("AH6U N5ER EM34", -12), ("CQ AH6U BL11", -13), ("N5ER AH6U +07", -13),
+                                    ("AH6U N5ER R-04", -12), ("N5ER AH6U RR73", -13)]):
+        m.handle(w.parse(w.encode_decode(msg, snr=snr, client_id="c")), t + dt.timedelta(seconds=15 * i))
+    (ex,) = m.exchanges.exchanges.values()
+    assert ex.stage == exchange.CONFIRMED and ex.band == "10m" and ex.mode == "FT8"
+    assert m.grid_of(ex.a) == "EM34" and m.grid_of(ex.b) == "BL11"
