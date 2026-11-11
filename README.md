@@ -2,6 +2,8 @@
 
 QGIS plugin for amateur-radio Maidenhead maps.
 
+**Documentation**: the [tutorial](docs/tutorial.md) walks through a first hour; the [user guide](docs/user-guide.md) covers every tool, setting and output field, plus troubleshooting.
+
 - **Create Maidenhead grid**: field (2-char, 20°×10°) and square (4-char, 2°×1°) polygon layers with a `locator` attribute. They come pre-styled and labelled; squares appear when zoomed in past 1:20,000,000.
 - **Fetch from PSK Reporter**: downloads the last 1–24 hours of reports for a callsign into a folder, then maps the whole folder. It keeps to PSK Reporter's limit of one query per 5 minutes.
 - **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
@@ -51,7 +53,7 @@ The ionosphere tools take any station or exchange layer; they aren't tied to the
 *Plugins → Maidenhead Mapper → Fetch from PSK Reporter…*
 
 - **Callsign**, **Hours back** (1–24; PSK Reporter keeps about a day), optional **Mode** (e.g. `FT8`).
-- **Save into folder**: each fetch adds `psk_YYYY_MM_DD-HH_MM_SS.json` (UTC), the same format `pskreporter-pull.py` writes. Fetch every so often into the same folder to build up a history; overlaps are counted once.
+- **Save into folder**: each fetch adds `psk_YYYY_MM_DD-HH_MM_SS.json` (UTC). Fetch every so often into the same folder to build up a history; overlaps are counted once.
 - The output layer maps everything in the folder with default settings. For filters, run *Import* on the folder.
 - Asking again within 5 minutes is refused with the time left, as PSK Reporter requests.
 
