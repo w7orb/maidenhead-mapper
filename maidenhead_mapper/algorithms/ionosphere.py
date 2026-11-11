@@ -34,6 +34,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QCoreApplication, QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
+from ..core import hops as hops_mod
 from ..core import iono
 from ..core import maidenhead as mh
 from ..core.bands import BAND_NAMES
@@ -411,8 +412,9 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             "if needed) to work out:\n"
             "• hops_iono / takeoff_iono: likely hop count and takeoff angle with the measured layer "
             "height at the reflection points\n"
-            "• muf_mhz: the highest frequency F2 supports on this path (lowest MUF of its hops), "
-            "with fof2_mhz and hmf2_km at the reflection points\n"
+            "• muf_mhz: the F2 basic MUF of the path by ITU-R P.533-14 (the lower of its control "
+            "points: the mid-point for short paths, points half a hop in from each end for longer "
+            "ones), with fof2_mhz and hmf2_km at those control points\n"
             "• f2_status: 'F2' if the band is at or below the MUF, 'above F2 MUF' if not (the "
             "contact used sporadic-E, scatter, or the map is off), 'no data'\n"
             "• bands_f2: which of the path's bands F2 supports\n\n"
@@ -477,8 +479,8 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
         if sink is None:
             raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT))
         rfields = QgsFields()
-        for name, kind in (("path_fid", INT), ("calls", STRING), ("hop", INT), ("hops", INT), ("fof2_mhz", DOUBLE),
-                           ("hmf2_km", DOUBLE), ("mufd_mhz", DOUBLE), ("hop_muf_mhz", DOUBLE),
+        for name, kind in (("path_fid", INT), ("calls", STRING), ("kind", STRING), ("n", INT), ("hops", INT),
+                           ("fof2_mhz", DOUBLE), ("hmf2_km", DOUBLE), ("mufd_mhz", DOUBLE), ("point_muf_mhz", DOUBLE),
                            ("freq_mhz", DOUBLE), ("f2_status", STRING)):
             rfields.append(field(name, kind, 0))
         rsink, rdest = self.parameterAsSink(parameters, self.REFLECTIONS, context, rfields, QgsWkbTypes.Point, WGS84)
@@ -522,11 +524,22 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
                 out["hops_iono"], out["takeoff_iono"], out["bands_f2"] = result.hops, result.takeoff_deg, bands_ok
             sink.addFeature(out, QgsFeatureSink.FastInsert)
             if rsink is not None and result:
-                for k, (x, y, f2, h, mufd, hmuf) in enumerate(result.points, 1):
+                # Hop reflection points (where each hop meets the layer) ...
+                (x1, y1), (x2, y2) = mh.center(ga), mh.center(gb)
+                for k, (x, y) in enumerate(hops_mod.reflection_points(x1, y1, x2, y2, result.hops or 1), 1):
+                    f2, h, mufd = cond.at(x, y)
                     r = QgsFeature(rfields)
                     r.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
-                    r.setAttributes([f.id(), calls, k, result.hops, round(f2, 2), round(h, 1), round(mufd, 2),
-                                     round(hmuf, 2), freq, iono.STATUS_F2 if freq <= hmuf else iono.STATUS_ABOVE])
+                    r.setAttributes([f.id(), calls, "hop", k, result.hops, _r(f2, 2), _r(h, 1), _r(mufd, 2),
+                                     None, freq, None])
+                    rsink.addFeature(r, QgsFeatureSink.FastInsert)
+                # ... and the ITU-R P.533 control points the path MUF is judged at
+                for k, (x, y, f2, h, mufd, pmuf) in enumerate(result.points, 1):
+                    r = QgsFeature(rfields)
+                    r.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(x, y)))
+                    r.setAttributes([f.id(), calls, "control point", k, result.hops, _r(f2, 2), _r(h, 1),
+                                     _r(mufd, 2), _r(pmuf, 2), freq,
+                                     iono.STATUS_F2 if freq <= pmuf else iono.STATUS_ABOVE])
                     rsink.addFeature(r, QgsFeatureSink.FastInsert)
 
         feedback.pushInfo(self.tr("{} path(s): {} F2, {} above the F2 MUF, {} no data").format(
@@ -541,5 +554,24 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             results[self.REFLECTIONS] = rdest
             styling.attach_styler(context, rdest, self.tr("{} · reflection points").format(
                 source.sourceName() or "Paths"),
-                                  styling.LayerStyler(lambda: _categorized("f2_status", "point")))
+                                  styling.LayerStyler(_reflection_renderer))
         return results
+
+
+def _r(v, n):
+    return None if v is None else round(v, n)
+
+
+def _reflection_renderer():
+    """Grey dots for hop reflection points; diamonds coloured by status for P.533 control points."""
+    from qgis.core import QgsRuleBasedRenderer
+    root = QgsRuleBasedRenderer.Rule(None)
+    for expr, label, props in (
+            ("\"kind\" = 'hop'", "Hop reflection point",
+             {"name": "circle", "color": "#7f7f7f", "size": "1.4", "outline_style": "no"}),
+            (f"\"kind\" = 'control point' AND \"f2_status\" = '{iono.STATUS_F2}'", "Control point: F2 supports it",
+             {"name": "diamond", "color": STATUS_COLOURS[iono.STATUS_F2], "size": "3"}),
+            (f"\"kind\" = 'control point' AND \"f2_status\" = '{iono.STATUS_ABOVE}'", "Control point: above F2 MUF",
+             {"name": "diamond", "color": STATUS_COLOURS[iono.STATUS_ABOVE], "size": "3"})):
+        root.appendChild(QgsRuleBasedRenderer.Rule(QgsMarkerSymbol.createSimple(props), 0, 0, expr, label))
+    return QgsRuleBasedRenderer(root)

@@ -10,7 +10,7 @@ about=For amateur (ham) radio operators.
     WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
     Ionosphere: check any paths against KC2G's current MUF/foF2/hmF2 maps: path MUF, hops at the measured layer height, and which contacts F2 can't explain.
     No extra Python packages needed.
-version=0.6.1
+version=0.7.0
 author=Cody Tews
 email=cwtews@gmail.com
 homepage=https://github.com/cwtews/maidenhead-mapper
@@ -23,6 +23,10 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.7.0
+    - Path MUF follows ITU-R P.533-14 (midpoint / half-hop control points / long-path method)
+    - Reflection-point output has both hop points and P.533 control points
+    - Station balance and contrasts allow for FT8's decode floor and strong-signal compression, and resist fading outliers
     0.6.1
     - Exchange layers (live, sessions, ALL.TXT) show what you see vs what they see: b_vs_me_db, a_vs_me_db, report_diff_db
     0.6.0

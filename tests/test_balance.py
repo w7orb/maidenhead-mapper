@@ -20,7 +20,7 @@ def synth(x, edges, noise=0.0, seed=1):
 def test_recovers_balance_exactly_without_noise():
     x = {"A": 6, "B": 0, "C": -3, "D": -3}
     pairs = synth(x, [("A", "B"), ("B", "C"), ("C", "D"), ("A", "C"), ("B", "D")])
-    r = bal.solve(pairs)
+    r = bal.solve(pairs, floor_db=None, compress_db=None)   # some synthetic reports sit below -20
     mean = sum(x.values()) / 4
     for c, v in x.items():
         assert r[c].balance_db == pytest.approx(v - mean, abs=0.01)
@@ -31,7 +31,8 @@ def test_recovers_balance_exactly_without_noise():
 def test_noise_and_verdicts():
     x = {"BIG": 10, "Q1": 0, "Q2": 0, "Q3": 0, "EARS": -8}
     edges = [(a, b) for a in x for b in x if a < b] * 6
-    r = bal.solve(synth(x, edges, noise=3.0))
+    # synth() doesn't censor its reports, so none should be treated as bounds
+    r = bal.solve(synth(x, edges, noise=3.0), floor_db=None, compress_db=None)
     assert r["BIG"].balance_db - r["EARS"].balance_db == pytest.approx(18, abs=2)
     assert bal.verdict(r["BIG"]) == "loud but deaf" and bal.verdict(r["EARS"]) == "good ears"
     assert bal.verdict(r["Q1"]) == "balanced"
@@ -44,6 +45,9 @@ def test_separate_groups_are_centred_separately():
     assert r["A"].group != r["C"].group
     assert r["A"].balance_db == pytest.approx(3) and r["B"].balance_db == pytest.approx(-3)
     assert r["C"].balance_db == pytest.approx(0)
+    # both C-D reports at the floor: bounds point opposite ways, so no information
+    assert r["C"].n == 1 and r["C"].n_dropped == 1 and r["C"].std_err is None
+    assert bal.verdict(r["C"], min_n=1) == "uncertain"
 
 
 def test_contrasts():
@@ -53,3 +57,105 @@ def test_contrasts():
     c = bal.contrasts(rows)
     assert c["B"].n == 2 and c["B"].hears_vs_me_db == pytest.approx((10 + 4) / 2)   # B hears better than me
     assert c["A"].hears_vs_me_db == 4 and "C" not in c                            # my SNR of B missing
+
+
+PLAIN = {"floor_db": None, "compress_db": None, "robust": False}
+
+
+def test_pair_bounds():
+    assert bal.pair_bound(bal.TwoWay("A", "B", -10, -5)) == 0
+    assert bal.pair_bound(bal.TwoWay("A", "B", -10, -20)) == -1     # S(A->B) at floor: diff <= observed
+    assert bal.pair_bound(bal.TwoWay("A", "B", -20, -10)) == 1      # S(B->A) at floor: diff >= observed
+    assert bal.pair_bound(bal.TwoWay("A", "B", 0, 15)) == 1         # S(A->B) compressed: diff >= observed
+    assert bal.pair_bound(bal.TwoWay("A", "B", 16, -22)) == -1      # both say diff <= observed
+    assert bal.pair_bound(bal.TwoWay("A", "B", -21, -24)) is None   # opposite bounds
+    assert bal.pair_bound(bal.TwoWay("A", "B", -21, -24), floor_db=None) == 0
+
+
+def censored_synth(x, n, seed, floor=-20):
+    """Random exchanges, Gaussian fading, reports below `floor` read as `floor`."""
+    rng = random.Random(seed)
+    calls, out = list(x), []
+    for _ in range(n):
+        a, b = rng.sample(calls, 2)
+        path = rng.uniform(-28, -5)
+        s_ab = round(path + x[a] + rng.gauss(0, 3))
+        s_ba = round(path + x[b] + rng.gauss(0, 3))
+        out.append(bal.TwoWay(a, b, a_hears_b=max(s_ba, floor), b_hears_a=max(s_ab, floor)))
+    return out
+
+
+def test_censoring_bias_is_corrected():
+    x = {"BIG": 9, "A": 3, "B": 0, "C": 0, "D": -3, "EARS": -9}
+    mean = sum(x.values()) / len(x)
+    pairs = censored_synth(x, 600, seed=7)
+    old, new = bal.solve(pairs, **PLAIN), bal.solve(pairs)
+
+    def errors(r):
+        return [abs(r[c].balance_db - (x[c] - mean)) for c in x]
+    # plain least squares shrinks the spread: floor reports understate the difference
+    assert old["BIG"].balance_db - old["EARS"].balance_db < 18 - 6
+    assert max(errors(old)) > 4
+    # the censoring-aware fit recovers it
+    assert new["BIG"].balance_db - new["EARS"].balance_db == pytest.approx(18, abs=2)
+    assert max(errors(new)) < 1.2
+    assert sum(errors(new)) < 0.35 * sum(errors(old))
+    assert new["BIG"].n_censored > 0 and new["BIG"].n_dropped <= new["BIG"].n_censored <= new["BIG"].n
+
+
+def test_censoring_bias_corrected_on_average():
+    import math
+    better, ratio = 0, []
+    for seed in range(8):
+        rng = random.Random(100 + seed)
+        x = {f"S{i}": rng.choice([-8, -4, 0, 0, 4, 8]) for i in range(10)}
+        mean = sum(x.values()) / len(x)
+        pairs = censored_synth(x, 350, seed=seed)
+
+        def rmse(r):
+            return math.sqrt(sum((r[c].balance_db - (x[c] - mean)) ** 2 for c in x) / len(x))
+        o, n = rmse(bal.solve(pairs, **PLAIN)), rmse(bal.solve(pairs))
+        better += n < o
+        ratio.append(n / o)
+    assert better >= 7 and sum(ratio) / len(ratio) < 0.6
+
+
+def test_fading_outlier_barely_moves_estimates():
+    x = {"A": 4, "B": 0, "C": -2, "D": -2}
+    rng = random.Random(3)
+    pairs = []
+    for a in x:
+        for b in x:
+            if a < b:
+                for _ in range(4):
+                    path = rng.uniform(-15, -5)
+                    pairs.append(bal.TwoWay(a, b, round(path + x[b] + rng.gauss(0, 1)),
+                                            round(path + x[a] + rng.gauss(0, 1))))
+    outlier = bal.TwoWay("A", "B", -18, 12)                       # a 30 dB fade (DK3BA saw up to 30 dB)
+
+    def shift(**kw):
+        r0, r1 = bal.solve(pairs, **kw), bal.solve(pairs + [outlier], **kw)
+        return max(abs(r0[c].balance_db - r1[c].balance_db) for c in x)
+    assert shift(**PLAIN) > 1.0
+    assert shift() < 0.4
+
+
+def test_robust_std_err_uses_measured_scatter():
+    x = {"BIG": 10, "Q1": 0, "Q2": 0, "Q3": 0, "EARS": -8}
+    edges = [(a, b) for a in x for b in x if a < b] * 6
+    r = bal.solve(synth(x, edges, noise=3.0), floor_db=None, compress_db=None)
+    # dof = 60 - 5 + 1 >= MIN_DOF: sigma from the residuals (difference of two N(0,3): ~4.2), not the prior
+    se = r["Q1"].std_err * (r["Q1"].n ** 0.5)
+    assert 2.5 < se < 6.5
+    few = bal.solve(synth(x, edges[:10], noise=3.0), floor_db=None, compress_db=None)   # dof 6: prior
+    # (slightly above PRIOR/sqrt(n) when Huber down-weights an exchange)
+    assert few["Q1"].std_err == pytest.approx(bal.PRIOR_SIGMA_DB / few["Q1"].n ** 0.5, abs=0.2)
+
+
+def test_contrasts_skip_censored():
+    rows = [("B", -5, -12), ("B", -3, -10), ("B", -2, -21), ("B", 18, 0), ("B", None, -5)]
+    c = bal.contrasts(rows)
+    assert c["B"].n == 2 and c["B"].n_skipped == 2 and c["B"].hears_vs_me_db == pytest.approx(7)
+    c = bal.contrasts(rows, floor_db=None, compress_db=None)
+    assert c["B"].n == 4 and c["B"].n_skipped == 0
+    assert "Z" not in bal.contrasts([("Z", -22, -5)])               # only censored comparisons

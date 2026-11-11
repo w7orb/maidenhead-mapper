@@ -30,12 +30,29 @@ def test_contour_interpolation():
     assert iono.ContourField({}).value_at(0, 0) is None and not iono.ContourField({})
 
 
-def test_hop_muf_scaling():
-    assert iono.hop_muf(3000, 21.0, 300) == pytest.approx(21.0)
-    assert iono.hop_muf(1000, 21.0, 300) < 21.0 * 0.7           # short hops: much lower MUF
-    assert iono.hop_muf(3400, 21.0, 300) > 21.0                 # longer hop, lower angle: higher
+def test_p533_f2_muf_formulas():
     # sec(i) at 3000 km off ~300 km is about the familiar M(3000)F2 of ~3.3
     assert iono.sec_incidence(3000, 300) == pytest.approx(3.28, abs=0.05)
+    fh, x = 0.8, 2.0
+    dmax = min(iono.p533_dmax(3.0, x), iono.DMAX_CAP_KM)
+    assert dmax == iono.DMAX_CAP_KM                                  # eq. (5) ~5,400 km, capped
+    b = iono.p533_b(3.0, x)
+    assert b == pytest.approx(3.0, abs=0.05)                         # eq. (6): B ~ M(3000)F2
+    # eq. (3) at 3,000 km: Cd/C3000 = 1, so MUF = B foF2 + fH/2 (1 - 3000/dmax) ~ MUF(3000)
+    assert iono.f2_muf(3000, 7.0, 3.0, fh, x) == pytest.approx(b * 7.0 + fh / 2 * 0.25)
+    assert iono.f2_muf(0, 7.0, 3.0, fh, x) == pytest.approx(7.0 + fh / 2, abs=0.01)   # vertical: foF2 + fH/2
+    assert iono.f2_muf(1000, 7.0, 3.0, fh, x) < 0.7 * 21.0           # short hops: much lower MUF
+    assert iono.f2_muf(4000, 7.0, 3.0, fh, x) > 21.0                 # longest hop: higher
+    assert iono.f2_muf(6000, 7.0, 3.0, fh, x) == iono.f2_muf(4000, 7.0, 3.0, fh, x)   # clipped to dmax
+    assert iono.mirror_height_km(3.0) == pytest.approx(1490 / 3 - 176) and iono.mirror_height_km(1.5) == 500
+    # eq. (30): fD 0 at 0 km rising to ~1 at 4,000 km; eq. (29) between fz and f4
+    assert iono.distance_factor(0) == 0 and iono.distance_factor(4000) == pytest.approx(1.0, abs=0.05)
+    assert iono.f2_muf_long(0, 7.0, 3.0, fh) == pytest.approx(7.0 + fh / 2)
+    assert iono.f2_muf_long(4000, 7.0, 3.0, fh) == pytest.approx(1.1 * 21.0, abs=0.8)
+    assert iono.long_path_hops(10000) == (4, 2500)                  # 3 x 3,333 km is under 3 deg off 300 km
+    # gyrofrequency at 300 km: ~0.73 MHz at the dipole equator, twice that at the pole
+    assert iono.gyro_mhz(0, 0) == pytest.approx(0.73, abs=0.05)
+    assert iono.gyro_mhz(-72.68, 80.65) == pytest.approx(2 * iono.gyro_mhz(-72.68 + 180, -80.65 + 90), rel=0.01)
 
 
 def cond(mufd=21.0, fof2=7.0, hmf2=300.0):
@@ -98,13 +115,53 @@ def test_ionosonde_nudges_map_nearby_only():
     assert iono.Conditions(None, flat(21.0), flat(7.0), flat(300.0), [low]).at(0, 0) == (7.0, 300.0, 21.0)
 
 
+KM_DEG = 111.195          # km per degree along the equator
+
+
+def _xs_km(r):
+    return sorted(round(x * KM_DEG) for x, _, *_ in r.points)
+
+
+def _sample(lon, lat, c):
+    f2, h, mufd = c.at(lon, lat)
+    _, _, _, m3, fh, x = iono._sample(c, lon, lat)
+    return f2, m3, fh, x
+
+
+def test_p533_short_paths_use_mid_point():
+    # D <= dmax (Table 1a, §3.5.1.1): one control point, the mid-point; eq. (3) for d = D / n0
+    c = cond()
+    r = iono.analyse_path(0, 0, 1000 / KM_DEG, 0, 28.074, c)
+    assert len(r.points) == 1 and _xs_km(r) == [500]
+    f2, m3, fh, x = _sample(*r.points[0][:2], c)
+    assert r.muf_mhz == pytest.approx(iono.f2_muf(1000, f2, m3, fh, x), abs=0.01)
+    assert r.status == iono.STATUS_ABOVE and r.muf_mhz < 15
+
+
+def test_p533_paths_beyond_dmax_use_d0_control_points():
+    # dmax < D <= 9,000 km (§3.5.1.2): lower F2(dmax)MUF at T + d0/2 and R - d0/2.
+    # hr = 1490/3 - 176 = 321 km -> 3 deg hops up to ~3,290 km, so n0 = 2 for 5,000 km
+    c = cond()
+    r = iono.analyse_path(0, 0, 5000 / KM_DEG, 0, 21.0, c)
+    assert len(r.points) == 2 and _xs_km(r) == [1250, 3750]
+    f2, m3, fh, x = _sample(*r.points[0][:2], c)
+    assert r.points[0][5] == pytest.approx(iono.f2_muf(iono.DMAX_CAP_KM, f2, m3, fh, x))
+    assert r.muf_mhz > 21.0 and r.status == iono.STATUS_F2
+    # 7,000-9,000 km (§5.4): the basic MUF is still eq. (3) at the Table 1a points (n0 = 3 here)
+    r8 = iono.analyse_path(0, 0, 8000 / KM_DEG, 0, 21.0, c)
+    assert _xs_km(r8) == [1333, 6667]
+    assert r8.muf_mhz == pytest.approx(r.muf_mhz, abs=0.1) and r8.status == iono.STATUS_F2
+
+
 def test_long_paths_use_p533_control_points():
-    # 10,000 km along the equator, MUF(3000) 20 MHz everywhere
-    lon2 = 10000 / 111.195
+    # D > 9,000 km (§5.3.1): hops of dM <= 4,000 km at >= 3 deg off 300 km (4 x 2,500 km for
+    # 10,000 km), control points dM/2 from each end, fBM = fz + (f4 - fz) fD
+    lon2 = 10000 / KM_DEG
     middle = iono.Conditions(None, flat(20.0), flat(7.0), flat(300.0))
-    r = iono.analyse_path(0, 0, lon2, 0, 21.0, middle)
-    assert len(r.points) == 2 and r.muf_mhz == pytest.approx(22.0)          # 1.1 x MUF(3000)
-    xs = sorted(round(x) for x, _, *_ in r.points)
-    assert xs == [round(2000 / 111.195), round(8000 / 111.195)]              # 2,000 km from each end
-    assert r.status == iono.STATUS_F2 and r.hops == 3
-    assert iono.analyse_path(0, 0, lon2, 0, 28.0, middle).status == iono.STATUS_ABOVE
+    r = iono.analyse_path(0, 0, lon2, 0, 18.0, middle)
+    assert len(r.points) == 2 and _xs_km(r) == [1250, 8750]
+    fh = iono.gyro_mhz(r.points[0][0], 0)
+    assert r.points[0][5] == pytest.approx(iono.f2_muf_long(2500, 7.0, 20.0 / 7.0, fh))
+    assert 18.0 < r.muf_mhz < 20.0
+    assert r.status == iono.STATUS_F2 and r.hops == 3        # hops: likely count, 2 deg off hmF2
+    assert iono.analyse_path(0, 0, lon2, 0, 21.0, middle).status == iono.STATUS_ABOVE

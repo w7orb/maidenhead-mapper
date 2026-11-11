@@ -82,10 +82,15 @@ Two sources, chosen per path (*Ionosphere source*; `iono_source` records which w
 - **Fetch ionosphere (KC2G)**: ionosondes that reported recently (foF2, hmF2, MUF(3000), confidence) and one contour map (MUF(3000), foF2 or hmF2).
 - **Check paths against the ionosphere**: input any station layer (paths from *My grid*) or exchange layer (grid_a to grid_b). For each path it works out:
   - the likely hop count using the layer height at the reflection points (`hops_iono`, `takeoff_iono`);
-  - each hop's MUF from the secant law, scaled to MUF(3000) there; the path MUF is the lowest. Paths over 4,000 km follow ITU-R P.533 instead: the lower of 1.1 × MUF(3000) at two control points 2,000 km from each end (`muf_mhz`, with `fof2_mhz`, `hmf2_km`);
+  - the path's F2 **basic MUF** by ITU-R P.533-14 (`muf_mhz`, with `fof2_mhz`, `hmf2_km`):
+    - up to one hop's maximum length: the path midpoint (Table 1a, eq. 3);
+    - longer: the lower of the values at control points half a hop from each end (§3.5.1.2);
+    - over 9,000 km: the long-path method (§5.3.1, eqs. 29–30).
+
+    This is the *basic* MUF. P.533's operational MUF is higher, by 10–20% or more, so contacts slightly above it are common, especially on long paths;
   - `f2_status`: **F2** (the band is at or below the MUF), **above F2 MUF** (not explained by simple F2 hops: sporadic-E, scatter, long path, or the map is off), or **no data**;
   - `bands_f2`: which of the path's bands F2 supports.
-  With *Auto*, recent paths use KC2G and older ones the CCIR model. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, one per hop, with the layer and MUF there.
+  With *Auto*, recent paths use KC2G and older ones the CCIR model. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, with `kind` *hop* (where each hop meets the layer; grey dots) and *control point* (where P.533 judges the MUF, coloured by whether the band fits).
 - Near a current, trusted ionosonde (confidence 50 or higher), the maps are corrected towards its measurements; the correction fades out over about 1,000 km. Contour maps can't show peaks above their top level (MUF(3000) stops at 28 MHz), and this fills that in where there's an ionosonde.
 
 ### Find sporadic-E paths
@@ -103,6 +108,8 @@ For a PSK Reporter layer, an ALL.TXT import or a saved session: a table per band
 ### Station balance from two-way reports (WSJT-X)
 
 In an exchange each side reports how it hears the other. Path loss and antennas are the same both ways, so the difference between the two reports is one station's *power + receiver noise* minus the other's. A least-squares fit over all two-way exchanges (one or more exchange layers, per band) gives each station a **balance**: *loud but deaf* (> +3 dB), *good ears* (< −3 dB), *balanced*, or *uncertain* (too few exchanges, or a standard error over 3 dB).
+
+The fit allows for FT8's limits (DK3BA 2024). Reports at or below about −20 dB sit at the decode floor, and reports at or above about +15 dB are compressed, so both are treated as bounds, not exact values (a Tobit-style step). Fading outliers are down-weighted with a Huber loss. `n_censored` and `n_dropped` say how many pairs that affected.
 
 It also compares **what you see with what they see**: `hears_vs_me_db` is how a station heard a signal minus how you heard the same signal (median over exchanges). The optional exchanges output has the per-exchange numbers (`report_diff_db`, `b_vs_me_db`, `a_vs_me_db`). Paths differ, so trust stations with many exchanges in different directions; this needs hours to days of decoding.
 

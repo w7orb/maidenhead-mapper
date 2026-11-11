@@ -83,17 +83,24 @@ class StationBalanceAlgorithm(QgsProcessingAlgorithm):
             "compare stations.\n\n"
             "Balance: in an exchange each side reports how it hears the other. Path loss and both "
             "antennas are the same both ways, so the difference of the two reports is (power + "
-            "receiver noise) of one station minus the other's. Least squares over every two-way "
-            "exchange gives each station's balance, centred on 0 within each group of connected "
-            "stations:\n"
+            "receiver noise) of one station minus the other's. A fit over every two-way exchange "
+            "gives each station's balance, centred on 0 within each group of connected stations:\n"
             "• loud but deaf (> +3 dB): strong signal and/or noisy receiver\n"
             "• good ears (< −3 dB): weak signal and/or quiet receiver\n"
-            "• uncertain: too few exchanges, or a standard error over 3 dB\n\n"
+            "• uncertain: too few usable exchanges, or a standard error over 3 dB\n\n"
+            "Single reports fade by up to 30 dB and come from different 15 s slots (DK3BA 2024), so "
+            "the fit is robust (Huber): one wild exchange barely moves it. Reports are also censored: "
+            "at or below {floor} dB a signal is at the decode floor (decoded only on a fade-up); at "
+            "or above +{comp} dB WSJT-X compresses strong signals. Such a report is used only as a "
+            "bound (Tobit-style), and an exchange whose two bounds point opposite ways is left out. "
+            "n_censored and n_dropped count these per station.\n\n"
             "Receive contrast: when you decode a signal and the station it was sent to reports it, "
             "hears_vs_me_db is how that station heard it minus how you did (median). Positive = they "
-            "hear these signals better than you. Paths differ, so trust stations with many "
-            "exchanges in different directions.\n\n"
-            "Needs lots of data: aim for 100+ exchanges per station; an hour of decoding gives a few.")
+            "hear these signals better than you. Comparisons where either SNR is censored are "
+            "skipped (n_vs_me_skipped). Paths differ, so trust stations with many exchanges in "
+            "different directions.\n\n"
+            "Needs lots of data: DK3BA recommends averaging at least 100 exchanges per station; an "
+            "hour of decoding gives a few.").format(floor=bal.FLOOR_DB, comp=bal.COMPRESS_DB)
 
     def initAlgorithm(self, config=None):  # noqa: N802
         self.addParameter(QgsProcessingParameterMultipleLayers(
@@ -149,7 +156,9 @@ class StationBalanceAlgorithm(QgsProcessingAlgorithm):
         fields = QgsFields()
         for name, kind in (("call", STRING), ("band", STRING), ("grid", STRING), ("balance_db", DOUBLE),
                            ("std_err_db", DOUBLE), ("n_two_way", INT), ("group_size", INT), ("verdict", STRING),
-                           ("hears_vs_me_db", DOUBLE), ("n_vs_me", INT), ("is_me", INT)):
+                           ("n_censored", INT), ("n_dropped", INT),
+                           ("hears_vs_me_db", DOUBLE), ("n_vs_me", INT), ("n_vs_me_skipped", INT),
+                           ("is_me", INT)):
             fields.append(field(name, kind, 0))
         sink, dest = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.Point, WGS84)
         if sink is None:
@@ -160,8 +169,10 @@ class StationBalanceAlgorithm(QgsProcessingAlgorithm):
             solved = bal.solve(by_band.get(key, []))
             cons = bal.contrasts(contrast_rows.get(key, []))
             n_pairs = len(by_band.get(key, []))
-            feedback.pushInfo(self.tr("{}: {} two-way exchange(s), {} station(s) balanced, {} with contrasts").format(
-                key or "All bands", n_pairs, len(solved), len(cons)))
+            n_cens = sum(1 for p in by_band.get(key, []) if bal.pair_bound(p) != 0)
+            feedback.pushInfo(self.tr("{}: {} two-way exchange(s) ({} with a censored report), {} station(s) "
+                                      "balanced, {} with contrasts").format(
+                key or "All bands", n_pairs, n_cens, len(solved), len(cons)))
             for call in sorted(set(solved) | set(cons)):
                 g = grids.get(call)
                 if not g:
@@ -174,13 +185,16 @@ class StationBalanceAlgorithm(QgsProcessingAlgorithm):
                 f.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(*mh.center(g))))
                 f.setAttributes([call, key, g, b.balance_db if b else None, b.std_err if b else None,
                                  b.n if b else 0, b.group_size if b else None, v,
+                                 b.n_censored if b else 0, b.n_dropped if b else 0,
                                  round(c.hears_vs_me_db, 1) if c else None, c.n if c else 0,
+                                 c.n_skipped if c else 0,
                                  int(bool(me) and base_callsign(call) == me)])
                 sink.addFeature(f, QgsFeatureSink.FastInsert)
                 written += 1
         feedback.pushInfo(self.tr("{} station row(s): {}; {} without a grid left out").format(
             written, ", ".join(f"{n} {v}" for v, n in sorted(verdicts.items())), unplaced))
-        all_c = [t - m for rs in contrast_rows.values() for _, t, m in rs if t is not None and m is not None]
+        all_c = [t - m for rs in contrast_rows.values() for _, t, m in rs if t is not None and m is not None
+                 and not bal.censor_side(t) and not bal.censor_side(m)]
         if all_c:
             import statistics
             feedback.pushInfo(self.tr("Overall: the stations being called heard those signals a median {:+.1f} dB "
