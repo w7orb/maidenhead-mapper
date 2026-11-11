@@ -3,10 +3,12 @@ import os
 
 import pytest
 
+from tests import realdata
+
 from maidenhead_mapper.core import alltxt, exchange, live
 from maidenhead_mapper.core import wsjtx_udp as w
 
-ALLTXT = os.path.join(os.path.dirname(__file__), "..", "..", "pskreporter-analytics", "wsjtx", "data",
+ALLTXT = realdata.path("wsjtx", "data",
                       "2022_12_13", "loop1_ALL.TXT")
 
 SAMPLE = """\
@@ -88,7 +90,7 @@ def test_entry_round_trip():
     assert live.decode_entry("Nope", "{}") is None
 
 
-@pytest.mark.skipif(not os.path.isfile(ALLTXT), reason="pskreporter-analytics WSJT-X logs not checked out alongside")
+@pytest.mark.skipif(not os.path.isfile(ALLTXT), reason=realdata.REASON)
 def test_real_file_matches_tracker_counts():
     m = live.replay(alltxt.to_log(alltxt.read([ALLTXT])))
     assert len(m.exchanges.exchanges) == 131 and m.decodes == 474

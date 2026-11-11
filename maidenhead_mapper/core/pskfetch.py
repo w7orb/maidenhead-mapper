@@ -1,10 +1,7 @@
 """PSK Reporter query helpers. Pure Python; the HTTP request itself is made by
 the caller (QGIS's network stack, so proxy and SSL settings apply).
 
-Adapted from pskreporter-analytics `src/pskreporter-pull.py`
-(https://github.com/cwtews/pskreporter-analytics, GPLv3, same author).
-Files are written in the same psk_YYYY_MM_DD-HH_MM_SS.json format, so folders
-are interchangeable between the two projects.
+Files are written as psk_YYYY_MM_DD-HH_MM_SS.json, one per query.
 
 PSK Reporter asks that a client query no more often than once every 5
 minutes, and keeps about 24 hours of reports.

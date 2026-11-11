@@ -3,12 +3,14 @@ import os
 
 import pytest
 
+from tests import realdata
+
 from maidenhead_mapper.core import alltxt, skip
 from maidenhead_mapper.core import wsjtx_udp as w
 
 T0 = dt.datetime(2022, 11, 24, 18, 0, tzinfo=dt.timezone.utc)
-MISC2 = os.path.join(os.path.dirname(__file__), "..", "..", "pskreporter-analytics", "data", "misc2")
-ALLTXT = os.path.join(os.path.dirname(__file__), "..", "..", "pskreporter-analytics", "wsjtx", "data",
+MISC2 = realdata.path("data", "misc2")
+ALLTXT = realdata.path("wsjtx", "data",
                       "2022_12_13", "loop1_ALL.TXT")
 
 
@@ -43,7 +45,7 @@ def test_log_samples_learn_grids_from_anywhere_in_log():
     assert [(b, round(d)) for _, b, d in s] == [("10m", round(s[0][2]))] * 2 and s[0][2] > 3500
 
 
-@pytest.mark.skipif(not os.path.isdir(MISC2), reason="pskreporter-analytics data not checked out alongside")
+@pytest.mark.skipif(not os.path.isdir(MISC2), reason=realdata.REASON)
 def test_real_misc2_10m_skip():
     import warnings
     from maidenhead_mapper.core import psk
@@ -55,7 +57,7 @@ def test_real_misc2_10m_skip():
     assert 1500 < s.skip_km < 3000 and 6 < s.fof2_est_mhz < 11   # skip zone seen earlier; foF2 ~7-10 MHz
 
 
-@pytest.mark.skipif(not os.path.isfile(ALLTXT), reason="WSJT-X logs not checked out alongside")
+@pytest.mark.skipif(not os.path.isfile(ALLTXT), reason=realdata.REASON)
 def test_real_alltxt_samples():
     log = alltxt.to_log(alltxt.read([ALLTXT]), de_grid="CN85on")
     s = skip.log_samples(log)

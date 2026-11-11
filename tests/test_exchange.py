@@ -5,11 +5,13 @@ import sys
 
 import pytest
 
+from tests import realdata
+
 from maidenhead_mapper.core import exchange as x
 from maidenhead_mapper.core import ft8msg
 
 T0 = dt.datetime(2022, 12, 13, 20, 53, 15, tzinfo=dt.timezone.utc)
-ALLTXT = os.path.join(os.path.dirname(__file__), "..", "..", "pskreporter-analytics", "wsjtx", "data", "2022_12_13")
+ALLTXT = realdata.path("wsjtx", "data", "2022_12_13")
 
 
 def feed(tr, lines, band="10m", start=T0, step=15):
@@ -85,7 +87,7 @@ def test_my_qso_from_status_and_logged():
     assert tr.on_my_status("N0CALL", "-10", False, "10m", "FT8", T0) is None
 
 
-@pytest.mark.skipif(not os.path.isdir(ALLTXT), reason="pskreporter-analytics WSJT-X logs not checked out alongside")
+@pytest.mark.skipif(not os.path.isdir(ALLTXT), reason=realdata.REASON)
 def test_real_alltxt():
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "tools"))
     from replay_alltxt import read_lines

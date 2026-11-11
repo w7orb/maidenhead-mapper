@@ -4,10 +4,12 @@ import os
 
 import pytest
 
+from tests import realdata
+
 from maidenhead_mapper.core import psk, stations
 
 ME = "W7ORB"
-MISC2 = os.path.join(os.path.dirname(__file__), "..", "..", "pskreporter-analytics", "data", "misc2")
+MISC2 = realdata.path("data", "misc2")
 
 
 def rep(sender, receiver, t, snr=-10, freq=14074000, sloc="CN85on", rloc="CN85on", mode="FT8"):
@@ -111,7 +113,7 @@ def test_summarize_empty():
     assert rows == [] and st.stations == 0
 
 
-@pytest.mark.skipif(not os.path.isdir(MISC2), reason="pskreporter-analytics data not checked out alongside")
+@pytest.mark.skipif(not os.path.isdir(MISC2), reason=realdata.REASON)
 def test_real_misc2():
     reports = psk.add_remote_station(psk.load_reports(MISC2), ME)
     from collections import Counter

@@ -4,7 +4,7 @@ QGIS plugin for amateur-radio Maidenhead maps.
 
 - **Create Maidenhead grid**: field (2-char, 20°×10°) and square (4-char, 2°×1°) polygon layers with a `locator` attribute. They come pre-styled and labelled; squares appear when zoomed in past 1:20,000,000.
 - **Fetch from PSK Reporter**: downloads the last 1–24 hours of reports for a callsign into a folder, then maps the whole folder. It keeps to PSK Reporter's limit of one query per 5 minutes.
-- **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*, or from [pskreporter-analytics](https://github.com/cwtews/pskreporter-analytics)) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
+- **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
 - **Import WSJT-X ALL.TXT**: replays WSJT-X logs through the live map's logic, giving station markers and exchange lines (including exchanges between other stations) for past sessions.
 - **Import ADIF log**: maps your logged QSOs from `wsjtx_log.adi`, JTDX, N1MM, LoTW or any logger's ADIF export (.adi or .adx), merging the same QSO across files.
 - **Ionosphere (KC2G)**: fetch current ionosonde data and MUF/foF2/hmF2 maps, and check any station or exchange layer against them. Each path gets its MUF, layer height, hop count and whether F2 can explain it, plus a layer of reflection points.
@@ -219,6 +219,8 @@ python -m pytest
 ```
 
 Runs with any Python 3.8+ that has pytest installed; QGIS is not needed. The plugin itself uses only the Python standard library and QGIS.
+
+A few checks against real recordings (PSK Reporter pulls and WSJT-X `ALL.TXT` files) are skipped unless `MM_REAL_DATA` points to a folder with `data/misc2/` and `wsjtx/data/2022_12_13/`; see `tests/realdata.py`.
 
 ## Release
 

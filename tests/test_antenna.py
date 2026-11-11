@@ -3,11 +3,13 @@ import os
 
 import pytest
 
+from tests import realdata
+
 from maidenhead_mapper.core import alltxt, antenna
 from maidenhead_mapper.core import wsjtx_udp as w
 
 T0 = dt.datetime(2022, 12, 13, 21, 0, tzinfo=dt.timezone.utc)
-DATA = os.path.join(os.path.dirname(__file__), "..", "..", "pskreporter-analytics", "wsjtx", "data", "2022_12_13")
+DATA = realdata.path("wsjtx", "data", "2022_12_13")
 
 
 def d(sec, msg, snr):
@@ -52,7 +54,7 @@ def test_destination():
     assert lon == pytest.approx(1.0, abs=1e-3) and lat == pytest.approx(0, abs=1e-6)
 
 
-@pytest.mark.skipif(not os.path.isdir(DATA), reason="2022 A/B recordings not checked out alongside")
+@pytest.mark.skipif(not os.path.isdir(DATA), reason=realdata.REASON)
 def test_real_recordings_match_prototype():
     da = antenna.decodes_from_rows(alltxt.read([os.path.join(DATA, f"DXCommander{k}_ALL.TXT") for k in (1, 2, 3)]))
     db = antenna.decodes_from_rows(alltxt.read([os.path.join(DATA, f"loop{k}_ALL.TXT") for k in (1, 2, 3)]))

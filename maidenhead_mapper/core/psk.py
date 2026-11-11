@@ -1,8 +1,6 @@
 """PSK Reporter file loading and direction labelling. Pure Python.
 
-Adapted from pskreporter-analytics `src/psktools.py` at commit 4a94e80
-(https://github.com/cwtews/pskreporter-analytics, GPLv3, same author).
-Changes from the original:
+Notes:
   - No pandas: reports are plain dicts (the JSON objects as PSK Reporter sends
     them) plus a few added keys, so the plugin has no outside dependencies.
   - `add_remote_station` adds no Lat/Lon; positions come from
