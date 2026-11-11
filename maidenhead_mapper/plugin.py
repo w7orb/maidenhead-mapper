@@ -40,6 +40,7 @@ LAYOUT = [
         ("alg", "maidenhead:import_alltxt", "Import WSJT-X ALL.TXT…"),
         None,
         ("alg", "maidenhead:station_balance", "Station balance from two-way reports…"),
+        ("alg", "maidenhead:antenna_compare", "Antenna A/B comparison…"),
     ]),
     ("Ionosphere", [
         ("alg", "maidenhead:fetch_ionosphere", "Fetch ionosphere (KC2G)…"),

@@ -9,6 +9,7 @@ from .algorithms.create_grid import CreateGridAlgorithm
 from .algorithms.fetch_psk import FetchPskAlgorithm
 from .algorithms.import_alltxt import ImportAllTxtAlgorithm
 from .algorithms.ionosphere import CheckPathsAlgorithm, FetchIonosphereAlgorithm
+from .algorithms.antenna_alg import AntennaCompareAlgorithm
 from .algorithms.balance_alg import StationBalanceAlgorithm
 from .algorithms.propagation import SkipDistanceAlgorithm, SporadicEAlgorithm
 from .algorithms.import_psk import ImportPskAlgorithm
@@ -36,3 +37,4 @@ class MaidenheadProvider(QgsProcessingProvider):
         self.addAlgorithm(SporadicEAlgorithm())
         self.addAlgorithm(SkipDistanceAlgorithm())
         self.addAlgorithm(StationBalanceAlgorithm())
+        self.addAlgorithm(AntennaCompareAlgorithm())

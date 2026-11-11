@@ -33,7 +33,7 @@ Everything is under *Plugins → Maidenhead Mapper* (and the toolbar button's dr
 |---|---|
 | Grid | Create Maidenhead grid |
 | PSK Reporter | Fetch from PSK Reporter, Import PSK Reporter reports |
-| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Station balance from two-way reports |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Station balance from two-way reports, Antenna A/B comparison |
 | Ionosphere | Fetch ionosphere (KC2G), Check paths against the ionosphere (MUF), Find sporadic-E paths, Skip distance by hour |
 | (top level) | Activity timeline (panel) |
 
@@ -112,6 +112,16 @@ In an exchange each side reports how it hears the other. Path loss and antennas 
 The fit allows for FT8's limits (DK3BA 2024). Reports at or below about −20 dB sit at the decode floor, and reports at or above about +15 dB are compressed, so both are treated as bounds, not exact values (a Tobit-style step). Fading outliers are down-weighted with a Huber loss. `n_censored` and `n_dropped` say how many pairs that affected.
 
 It also compares **what you see with what they see**: `hears_vs_me_db` is how a station heard a signal minus how you heard the same signal (median over exchanges). The optional exchanges output has the per-exchange numbers (`report_diff_db`, `b_vs_me_db`, `a_vs_me_db`). Paths differ, so trust stations with many exchanges in different directions; this needs hours to days of decoding.
+
+### Antenna A/B comparison (WSJT-X)
+
+Two antennas (or receivers) decoding the same band at the same time: the same message in the same slot means the same transmitter and path, so SNR(A) − SNR(B) is the difference between the antennas towards that station (plus a fixed receiver offset). Inputs are two sets of ALL.TXT files, or a live/saved session with two WSJT-X instances (picked by id, or the two busiest).
+
+- **By direction**: 16 wedges around your grid, coloured by the median A − B (green = A stronger, purple = B), labelled with the number of pairs and the decodes *only A* / *only B* got.
+- **By station**: one point per station heard.
+- **By distance and takeoff**: a table using the estimated F2 takeoff angle.
+
+Below the decode floor the weaker antenna reports nothing rather than a low SNR, so read `decode_adv` (only A − only B, over all decodes) next to the median. In the 2022 DXCommander/loop recordings the median at 10–15° takeoff is about even, but the loop got 152 decodes the vertical missed against 42 the other way. The result is a relative pattern; trust bins with ~100 pairs or more.
 
 ### Activity timeline
 

@@ -10,15 +10,17 @@
 | 3 | ~~Timeline for live layers~~ **done** | M | Medium | — | The live model keeps per-station totals, not each decode, so it needs a decode history and a different rebuild that works with fading. |
 | 4 | ~~Hop geometry and takeoff angle~~ **done** | S–M | Medium (High with 5) | — | `hops`/`takeoff_deg` everywhere. *Check paths* adds hops at the measured height, MUF and reflection points. |
 | 5 | ~~Ionosonde / model enrichment~~ **done** | M–L | **High** | — | KC2G for current paths; a pure-Python CCIR (ITU-R P.1239) monthly-median model for any date, checked against PyIRI. PyIRI itself was rejected: it needs scipy ≥ 1.15, while QGIS 3.44 has 1.13. |
-| 6 | Antenna A/B comparison | S (after 1) | **High** | 1 (4 for angles) | Already prototyped on your data. Practical and unusual: most hams can't measure this today. |
+| 6 | ~~Antenna A/B comparison~~ **done** | S (after 1) | **High** | 1 (4 for angles) | Already prototyped on your data. Practical and unusual: most hams can't measure this today. |
 | 7 | ~~Station balance from exchanges~~ **done** | M | Medium | 1 helps | Least-squares fit plus confidence. Needs about 100+ exchanges per station, so value grows with data. |
 | 8 | ~~MUF check per path~~ **done** | S (after 5) | Medium–High | 5 | A simple comparison once MUF values exist; good at separating F2 paths from sporadic-E and scatter. |
 | 9 | ~~Sporadic-E detector (10m/6m)~~ **done** | M | Medium (High for 6m, in summer) | 4, 5 help | Heuristic clustering; seasonal. |
 | 10 | ~~Skip distance and hop structure over time~~ **done** | M | Medium | 3 for live data | Stats plus a chart in the timeline; shows changes, not absolute values. |
 | 11 | Band hotter/colder than usual | M | Low–Medium | 2, regular fetches | Needs weeks of collected data before it says anything; modest accuracy (r ≈ 0.3). |
 | 12 | ~~Menu: separate sections, ionosphere on its own~~ **done** | S | Medium | — | A flat list of 8 entries with 8 identical toolbar icons; group by purpose so the ionosphere tools aren't mistaken for part of WSJT-X. |
+| 13 | Propagation model from triangle data | S (dataset) + M–L (model) | **High** (research value) | 1, 2, 5; weeks of sessions | Separates station effects from path effects; physics features (f/MUF, hops, day/night) plus per-station terms, censoring-aware; must beat distance-only and MUF-only baselines on held-out days. |
+| 14 | Antenna pattern from neighbouring receivers | M | **High** | a PSK Reporter grid query (unverified) | Your RX/TX pattern from ordinary operating, using nearby spotters (or common receivers) as the shared-path reference. |
 
-**Done**: 1, 2, 3, 4, 5, 7, 8, 9, 10, 12. **Open**: 6 (antenna A/B), 11 (needs weeks of data).
+**Done**: 1–10, 12. **Open**: 11 (needs weeks of data), 13 (propagation model: dataset export first), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first). **Decision pending**: basic vs operational MUF.
 
 ## Details
 
@@ -47,3 +49,11 @@
     - **Activity timeline** stays at the top level, since it works with everything.
 
     Design rule: the ionosphere tools stay independent of the WSJT-X live panel. They take any station or exchange layer as input, and the live panel gets no ionosphere options of its own. Also give the toolbar one drop-down button (or distinct icons) instead of 8 identical ones. The Processing Toolbox groups already match: Stations / Ionosphere.
+13. **Propagation model from triangle data**: each overheard exchange gives A→B, B→A, A→me and B→me. The reciprocal pair cancels the path; the same transmitter at two receivers cancels the transmitter. Over many exchanges this separates station effects from path loss, which spot data alone can't.
+    - Step 1 (S): export a modelling dataset, one row per observed SNR (station ids, band, time, distance, hops, f/MUF, day/night at control points, Es flag, censored, decoded or not). Repeats and stalled exchanges are evidence of non-decodes.
+    - Step 2 (M–L): fit SNR = T_tx + R_rx − L(features) with censoring (Tobit) by alternating least squares, pure Python. Later: per-direction station terms for very active stations (other stations' antennas).
+    - Step 3: validate on held-out days against distance-only and P.533-MUF baselines before calling it better.
+14. **Antenna pattern from neighbouring receivers**: antenna gain cancels in two-way differences, so antennas need a shared path with different antennas.
+    - RX pattern: your SNR minus the SNR of receivers within ~200 km that decoded the same transmission in the same minute, binned by direction, distance and estimated takeoff.
+    - TX pattern: distant receivers that heard both you and a nearby transmitter in the same minute.
+    - Needs PSK Reporter reports for receivers and senders near you. Check whether pskquery supports a grid-square query (callsign=CN85 with modify=grid?) and its rate limits before building.
