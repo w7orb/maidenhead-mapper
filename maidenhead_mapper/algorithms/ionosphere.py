@@ -408,8 +408,8 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):  # noqa: N802
         return self.tr(
-            "For each path in a station or exchange layer, uses KC2G's current ionosphere (fetched "
-            "if needed) to work out:\n"
+            "For each path in a station or exchange layer, uses the ionosphere at the path's time "
+            "(see Ionosphere source below) to work out:\n"
             "• hops_iono / takeoff_iono: likely hop count and takeoff angle with the measured layer "
             "height at the reflection points\n"
             "• muf_mhz: the F2 basic MUF of the path by ITU-R P.533-14 (the lower of its control "
@@ -421,8 +421,11 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             "Exchange layers use grid_a/grid_b; station layers use grid and My grid. The band's FT8 "
             "frequency stands for it; a station on several bands is judged on its highest.\n\n"
             "Ionosphere source (iono_source says which was used per path):\n"
-            "• KC2G: current ionosonde-corrected maps, for paths within the time limit of the data\n"
-            "• CCIR model (ITU-R P.1239, as in IRI): the monthly median for the path's own date, "
+            "• Auto (default): KC2G for paths within the time limit of its data, the CCIR model "
+            "for older ones, path by path\n"
+            "• KC2G only: current ionosonde-corrected maps (downloaded if the cache is over 15 "
+            "minutes old); older paths get 'no data'\n"
+            "• CCIR model only (ITU-R P.1239, as in IRI): the monthly median for the path's own date, "
             "time and sunspot number, so past logs can be checked. Typical conditions, not that "
             "day's: expect foF2 within ~20%. The sunspot number comes from SILSO (Royal "
             "Observatory of Belgium) or KC2G, or enter one.")

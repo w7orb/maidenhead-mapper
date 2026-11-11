@@ -161,3 +161,28 @@ def test_live_model_builds_exchanges():
     (ex,) = m.exchanges.exchanges.values()
     assert ex.stage == exchange.CONFIRMED and ex.band == "10m" and ex.mode == "FT8"
     assert m.grid_of(ex.a) == "EM34" and m.grid_of(ex.b) == "BL11"
+
+
+def test_snr_median_from_histogram():
+    m = live.LiveModel()
+    feed(m, w.encode_status(dial_hz=14074000, mode="FT8", de_call="W7ORB", de_grid="CN85on"))
+    for snr in (-15, -8, -3, -20):
+        feed(m, w.encode_decode("CQ K1ABC FN42", snr=snr))
+    k = m.stations[("K1ABC", "heard")]
+    assert k.snr_median == -11.5 and (k.snr_best, k.snr_last) == (-3, -20)
+    feed(m, w.encode_decode("CQ K1ABC FN42", snr=-8))
+    assert k.snr_median == -8
+    assert live.StationState("X", "heard").snr_median is None
+
+
+def test_snr_median_matches_statistics():
+    import random
+    import statistics
+    rng = random.Random(1)
+    st = live.StationState("X", "heard")
+    vals = [rng.randint(-24, 15) for _ in range(501)]
+    for i, v in enumerate(vals):
+        st.add_snr(v)
+        if i in (0, 1, 9, 100, 500):
+            assert st.snr_median == statistics.median(vals[:i + 1])
+    assert len(st.snr_counts) <= 40           # bounded by the SNR range, not the report count

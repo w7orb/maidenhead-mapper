@@ -47,6 +47,31 @@ class StationState:
     first_utc: Optional[_dt.datetime] = None
     last_utc: Optional[_dt.datetime] = None
     called_me: int = 0          # messages from them addressed to my call
+    # SNR -> count over every report: an exact median in bounded memory
+    # (SNRs are whole dB in a ~60 dB range, however long the session)
+    snr_counts: Dict[int, int] = field(default_factory=dict)
+
+    def add_snr(self, snr):
+        self.snr_last = snr
+        self.snr_best = snr if self.snr_best is None else max(self.snr_best, snr)
+        self.snr_counts[snr] = self.snr_counts.get(snr, 0) + 1
+
+    @property
+    def snr_median(self):
+        n = sum(self.snr_counts.values())
+        if not n:
+            return None
+        lo_i, hi_i = (n - 1) // 2, n // 2      # the middle one or two, 0-based
+        lo = hi = None
+        seen = 0
+        for v in sorted(self.snr_counts):
+            seen += self.snr_counts[v]
+            if lo is None and seen > lo_i:
+                lo = v
+            if seen > hi_i:
+                hi = v
+                break
+        return (lo + hi) / 2.0
 
     def bands_str(self):
         order = {b: i for i, b in enumerate(BAND_NAMES)}
@@ -137,8 +162,7 @@ class LiveModel:
             self._learn_grid(p.sender, p.grid)
         st = self._station(p.sender, "heard")
         st.reports += 1
-        st.snr_last = msg.snr
-        st.snr_best = msg.snr if st.snr_best is None else max(st.snr_best, msg.snr)
+        st.add_snr(msg.snr)
         band = band_for_hz(client.dial_hz) if client.dial_hz else None
         if band:
             st.bands.add(band)
@@ -169,8 +193,7 @@ class LiveModel:
         st.first_utc = st.first_utc or when
         st.last_utc = when
         try:
-            st.snr_last = int(msg.report_rcvd)
-            st.snr_best = st.snr_last if st.snr_best is None else max(st.snr_best, st.snr_last)
+            st.add_snr(int(msg.report_rcvd))
         except (TypeError, ValueError):
             pass
         self._dirty.add((st.call, st.direction))

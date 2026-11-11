@@ -20,10 +20,10 @@ Requires QGIS 3.34 or later (tested on 3.44). No extra Python packages. Licensed
 
 ## Install for development (Windows)
 
-Link the plugin folder into your QGIS profile (run in `cmd`):
+Link the plugin folder into your QGIS profile (run in `cmd`; replace `<path to the repository>` with where you cloned it, e.g. `d:\projects\gis\maidenhead_plugin`):
 
 ```
-mklink /J "%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\maidenhead_mapper" "d:\projects\gis\maidenhead-mapper\maidenhead_mapper"
+mklink /J "%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\maidenhead_mapper" "<path to the repository>\maidenhead_mapper"
 ```
 
 Restart QGIS, then enable **Maidenhead Mapper** under *Plugins → Manage and Install Plugins → Installed*. Install the **Plugin Reloader** plugin to pick up code changes without restarting.
@@ -116,7 +116,7 @@ Each candidate is a point at the path midpoint with `foes_min_mhz`, the lowest E
 
 ### Skip distance by hour
 
-For a PSK Reporter layer, an ALL.TXT import or a saved session: a table per band and UTC hour with the skip edge (`skip_km`, the 10th percentile of sky-wave distances, from 20+ contacts), median and 90th-percentile distance, local contacts, and the foF2 the skip edge implies. For comparison it adds the CCIR monthly-median foF2 at your location (`ccir_fof2_mhz`), and KC2G's within 3 hours of its data. The Activity timeline also shows the skip edge per band for the chosen hours.
+For a PSK Reporter layer, an ALL.TXT import, a live or saved session (also a session `.gpkg` loaded on its own), or any layer with grids such as ADIF QSOs: a table per band and UTC hour with the skip edge (`skip_km`, the 10th percentile of sky-wave distances, from 20+ contacts), median and 90th-percentile distance, local contacts, and the foF2 the skip edge implies. For comparison it adds the CCIR monthly-median foF2 at your location (`ccir_fof2_mhz`), and KC2G's within 3 hours of its data. The Activity timeline also shows the skip edge per band for the chosen hours.
 
 ### Station balance from two-way reports (WSJT-X)
 

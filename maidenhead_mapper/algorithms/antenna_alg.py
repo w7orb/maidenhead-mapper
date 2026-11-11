@@ -1,7 +1,6 @@
 """Processing algorithm: compare two antennas (or receivers) from their decodes."""
 
 import datetime as _dt
-import json
 from collections import Counter
 
 from qgis.core import (
@@ -35,7 +34,6 @@ from qgis.PyQt.QtGui import QColor
 from ..core import alltxt, antenna
 from ..core import maidenhead as mh
 from . import styling
-from .import_alltxt import LOG_PROPERTY
 from .import_psk import WGS84
 from .paths import SETTINGS_MYGRID
 from .qt_compat import DOUBLE, INT, STRING, field
@@ -164,12 +162,9 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
 
     # -- inputs ------------------------------------------------------------------
     def _from_session(self, layer, parameters, context, feedback):
-        try:
-            props = json.loads(layer.customProperty(LOG_PROPERTY) or "{}")
-        except ValueError:
-            props = {}
+        from ..live.session import log_props, read_log
+        props = log_props(layer) or {}       # tagged, or recognised from a session GeoPackage
         if props.get("kind") == "session" and props.get("gpkg"):
-            from ..live.session import read_log
             log = read_log(props["gpkg"])
         else:
             from ..live.dock import CONTROLLERS

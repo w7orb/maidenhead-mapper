@@ -45,6 +45,13 @@ def test_log_samples_learn_grids_from_anywhere_in_log():
     assert [(b, round(d)) for _, b, d in s] == [("10m", round(s[0][2]))] * 2 and s[0][2] > 3500
 
 
+def test_path_samples():
+    t = dt.datetime(2026, 11, 11, 20, tzinfo=dt.timezone.utc)
+    out = skip.path_samples([(t, ["20m", "40m"], "CN85on", "FN42"), (None, ["20m"], "CN85", "FN42"),
+                             (t, ["20m"], "CN85", None), (t, [], "CN85", "FN42")])
+    assert [(b, round(d, -2)) for _, b, d in out] == [("20m", 4100.0), ("40m", 4100.0)]
+
+
 @pytest.mark.skipif(not os.path.isdir(MISC2), reason=realdata.REASON)
 def test_real_misc2_10m_skip():
     import warnings

@@ -157,9 +157,9 @@ class ImportPskAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):  # noqa: N802
         return self.tr(
-            "Reads a folder of PSK Reporter pulls (psk_*.json, as saved by "
-            "pskreporter-pull.py) and makes one marker per remote station and "
-            "direction:\n"
+            "Reads a folder of PSK Reporter pulls (the psk_*.json files written by "
+            "Fetch from PSK Reporter, one per query) and makes one marker per remote "
+            "station and direction:\n"
             "• heard: stations my receiver decoded\n"
             "• heard_me: stations that decoded me\n\n"
             "Reports repeated across overlapping pulls are counted once. Each marker "

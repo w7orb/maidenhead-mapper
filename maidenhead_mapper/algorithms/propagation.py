@@ -285,8 +285,13 @@ class SkipDistanceAlgorithm(QgsProcessingAlgorithm):
 
     def shortHelpString(self):  # noqa: N802
         return self.tr(
-            "For a dataset (a PSK Reporter layer from Fetch/Import, an ALL.TXT import or a saved live "
-            "session), a table per band and UTC hour of how far contacts reached:\n"
+            "For a dataset, a table per band and UTC hour of how far contacts reached. Input can be:\n"
+            "• a PSK Reporter layer (Fetch/Import), an ALL.TXT import, a saved live session (also one "
+            "loaded straight from its .gpkg) or the running live map: every report or decode is read "
+            "from the raw data;\n"
+            "• any other layer with grids, such as ADIF QSO lines, ADIF worked stations or an exchange "
+            "layer: one contact per feature and band, at its last_utc (or first_utc) time.\n\n"
+            "Output columns:\n"
             "• skip_km: the skip edge, the 10th percentile of sky-wave distances (over 300 km); "
             "needs 20+ contacts in the hour\n"
             "• median_km, p90_km, and n_local (under 300 km: ground wave or local)\n"
@@ -294,26 +299,64 @@ class SkipDistanceAlgorithm(QgsProcessingAlgorithm):
             "the edge is within one hop. An indicator for comparing hours, not a measurement.\n"
             "• kc2g_fof2_mhz: KC2G's foF2 at your location, when its cached data is within 3 hours.\n"
             "• ccir_fof2_mhz: the CCIR monthly-median foF2 at your location for that hour and sunspot number.\n\n"
-            "Distances are from your grid. Plot the table with the DataPlotly plugin, or join it to "
-            "a layer.")
+            "Distances are from your grid (for line layers, between the line's two grids). Plot the "
+            "table with the DataPlotly plugin, or join it to a layer.")
 
     def initAlgorithm(self, config=None):  # noqa: N802
         self.addParameter(QgsProcessingParameterFeatureSource(
-            self.INPUT, self.tr("Layer from Fetch/Import PSK Reporter, Import ALL.TXT or a saved session"),
+            self.INPUT, self.tr("Station, exchange or QSO layer (PSK Reporter, ALL.TXT, session, live, ADIF)"),
             [QgsProcessing.TypeVectorPoint, QgsProcessing.TypeVectorLine]))
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT, self.tr("Skip distance by hour"), QgsProcessing.TypeVector))
 
-    def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
-        import json
+    def _feature_samples(self, layer, feedback):
+        """(samples, my grid) read from a layer's features through PathReader:
+        ADIF QSOs, exchange layers, or station layers (paths from My grid)."""
+        import datetime as _dt
         from ..core import skip
+        my_grid = my_grid_for(layer)
+        try:
+            reader = PathReader(layer.fields(), my_grid)
+        except PathError as exc:
+            raise QgsProcessingException(self.tr(
+                "This layer has no raw data to read and no usable paths: {} Use a PSK Reporter, ALL.TXT, "
+                "session, live or ADIF layer, or one with grid_a/grid_b or grid fields.").format(self.tr(str(exc))))
+        names = reader.names
+        if "last_utc" not in names and "first_utc" not in names:
+            raise QgsProcessingException(self.tr("This layer has grids but no last_utc or first_utc time field."))
+        if "band" not in names and "bands" not in names:
+            raise QgsProcessingException(self.tr("This layer has grids but no band or bands field."))
+        paths = []
+        for f in layer.getFeatures(QgsFeatureRequest().setInvalidGeometryCheck(QgsFeatureRequest.GeometryNoCheck)):
+            p = reader.read(f)
+            when = p["when"]
+            if when is None and "first_utc" in names:
+                q = f["first_utc"]
+                try:
+                    if q is not None and q.isValid():
+                        when = _dt.datetime.fromtimestamp(q.toSecsSinceEpoch(), _dt.timezone.utc)
+                except AttributeError:
+                    when = None
+            paths.append((when, [b for b, _ in p["bands"]], p["ga"], p["gb"]))
+        feedback.pushInfo(self.tr("Reading {} feature(s) as contacts ({})").format(
+            len(paths), self.tr("paths between their two grids") if reader.exchanges
+            else self.tr("paths from {}").format(my_grid)))
+        if not reader.exchanges:
+            feedback.pushInfo(self.tr("A station layer has one row per station (at its last time), so each "
+                                      "hour counts stations, not every contact."))
+        return skip.path_samples(paths), ("" if reader.exchanges else my_grid)
+
+    def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
+        import os
+        from ..core import skip
+        from ..live.session import log_props
         from ..timeline.sources import LogSource, PskSource
-        from .import_alltxt import LOG_PROPERTY
         from .import_psk import LAYER_PROPERTY
 
         layer = self.parameterAsVectorLayer(parameters, self.INPUT, context)
         if layer is None:
             raise QgsProcessingException(self.tr("Choose a layer in the project."))
+        props = None if layer.customProperty(LAYER_PROPERTY) else log_props(layer)
         if layer.customProperty(LAYER_PROPERTY):
             src = PskSource(layer)
             feedback.pushInfo(self.tr("Reading PSK Reporter files in {}").format(src.opts["folder"]))
@@ -323,24 +366,36 @@ class SkipDistanceAlgorithm(QgsProcessingAlgorithm):
                 from ..core.stations import guess_my_grid
                 my_grid = guess_my_grid(reports) or ""
             samples = skip.psk_samples(reports, my_grid, tuple(src.opts.get("directions") or ("heard", "heard_me")))
-        elif layer.customProperty(LOG_PROPERTY):
-            props = json.loads(layer.customProperty(LOG_PROPERTY))
-            if props.get("kind") not in ("alltxt", "session"):
-                raise QgsProcessingException(self.tr("A running live map has no saved log; tick 'Save session' "
-                                                     "in the live panel, or use a saved session layer."))
-            src = LogSource([layer])
-            feedback.pushInfo(self.tr("Reading the WSJT-X log"))
-            log = src.load()
-            my_grid = props.get("mygrid") or ""
+        elif props and props.get("kind") in ("alltxt", "session", "live"):
+            if props["kind"] == "live":
+                from ..live.dock import CONTROLLERS
+                ctl = CONTROLLERS.get(props.get("group", ""))
+                if ctl is None:
+                    raise QgsProcessingException(self.tr(
+                        "This live map is no longer running and wasn't saved, so its decodes are gone. Tick "
+                        "'Save session' in the live panel next time, or use a saved session layer."))
+                feedback.pushInfo(self.tr("Reading the running live map's decodes"))
+                log = list(ctl.model.log)
+                my_grid = ctl.model.my_grid or ""
+            else:
+                feedback.pushInfo(self.tr("Reading the WSJT-X log ({})").format(
+                    "ALL.TXT" if props["kind"] == "alltxt" else os.path.basename(props.get("gpkg", ""))))
+                log = LogSource([layer]).load()
+                my_grid = props.get("mygrid") or ""
             samples = skip.log_samples(log, my_grid)
             if not my_grid:
                 my_grid = next((m.de_grid for _, m in log if getattr(m, "de_grid", "")), "")
         else:
-            raise QgsProcessingException(self.tr("This layer doesn't come from a PSK Reporter fetch/import, an "
-                                                 "ALL.TXT import or a saved session, so its raw data can't be found."))
+            samples, my_grid = self._feature_samples(layer, feedback)
         if not samples:
-            raise QgsProcessingException(self.tr("No contacts with both a grid and a time (is My grid known?)."))
-        feedback.pushInfo(self.tr("{} contact(s) from {}").format(len(samples), my_grid))
+            raise QgsProcessingException(self.tr("No contacts with both a grid, a band and a time "
+                                                 "(is My grid known?)."))
+        if my_grid:
+            feedback.pushInfo(self.tr("{} contact(s) from {}").format(len(samples), my_grid))
+        else:
+            feedback.pushInfo(self.tr("{} contact(s)").format(len(samples)))
+            mine = [g for g in (my_grid_for(layer),) if mh.is_valid(g or "")]
+            my_grid = mine[0] if mine else ""     # for the kc2g/ccir columns at your location
 
         cond = None
         try:

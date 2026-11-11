@@ -60,7 +60,7 @@ def live_station_attrs(model, st):
     dist, bear = model.distance_bearing(st.grid)
     n, takeoff = _hops.likely_hops(dist)
     return [
-        st.call, st.grid, st.direction, st.reports, st.snr_best, None, st.snr_last,
+        st.call, st.grid, st.direction, st.reports, st.snr_best, st.snr_median, st.snr_last,
         st.bands_str(), ",".join(sorted(st.modes)),
         utc_qdatetime(st.first_utc) if st.first_utc else None,
         utc_qdatetime(st.last_utc) if st.last_utc else None,

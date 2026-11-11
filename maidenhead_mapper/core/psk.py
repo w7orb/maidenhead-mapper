@@ -32,7 +32,7 @@ class Reports(list):
 
 
 def read_psk_file(path):
-    """Load one saved PSK Reporter query (as written by pskreporter-pull.py)."""
+    """Load one saved PSK Reporter query (a psk_*.json file written by Fetch)."""
     with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 

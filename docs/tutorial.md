@@ -198,7 +198,7 @@ Stations fade over 30 minutes after they were last heard. When you log a QSO, th
 
 **What this tells you**: who is on the band right now, and where. Faded dots show where the band *was* open. The status counts stations *waiting for a grid*: decoded, but not yet seen sending a grid.
 
-With saving on, the session is written every 2 seconds to `wsjtx_session_YYYYMMDD_HHMMSS.gpkg`, so nothing is lost if QGIS closes. Save the QGIS project so the timeline can find the session again. The Activity timeline also offers **WSJT-X live map (running)**: choosing hours there shows the past while the map keeps recording.
+With saving on, the session is written every 2 seconds to `wsjtx_session_YYYYMMDD_HHMMSS.gpkg`, so nothing is lost if QGIS closes. To look at it again later, drag its `stations` and `exchanges` tables from the `.gpkg` into any project; the timeline recognises it. The Activity timeline also offers **WSJT-X live map (running)**: choosing hours there shows the past while the map keeps recording.
 
 <!-- screenshot: live panel status and fading markers -->
 
@@ -258,7 +258,7 @@ If nothing is found, that's normal outside the sporadic-E season or on lower ban
 ### 6d. Skip distance by hour
 
 1. *Ionosphere → Skip distance by hour…*
-2. Input: a PSK Reporter layer, an ALL.TXT import, or a **saved** live session. Click **Run**.
+2. Input: a PSK Reporter layer, an ALL.TXT import, a live or saved session, or your ADIF QSOs. Click **Run**.
 
 **You should see** a table, per band and UTC hour:
 

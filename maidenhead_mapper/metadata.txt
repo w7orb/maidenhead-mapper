@@ -8,9 +8,9 @@ about=For amateur (ham) radio operators.
     Import WSJT-X ALL.TXT: past sessions as stations and exchange lines (both reports, your SNR of each side).
     Activity timeline: a reports-per-hour chart for any of these; drag across it to map only those hours.
     WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
-    Ionosphere: check any paths against KC2G's current MUF/foF2/hmF2 maps: path MUF, hops at the measured layer height, and which contacts F2 can't explain.
+    Ionosphere: check any paths against KC2G's current maps or the CCIR monthly-median model: path MUF, hops at the layer height, and which contacts F2 can't explain.
     No extra Python packages needed.
-version=0.9.0
+version=0.9.1
 author=Cody Tews
 email=cwtews@gmail.com
 homepage=https://github.com/cwtews/maidenhead-mapper
@@ -23,6 +23,11 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.9.1
+    - Skip distance accepts ADIF QSO and worked-station layers and any layer with grids, and the running live map; clearer errors
+    - A saved session GeoPackage loaded into any project is recognised from its tables (Activity timeline, Skip distance, Antenna A/B)
+    - snr_median filled on live, session and ALL.TXT station layers (exact median over every decode)
+    - Help text: Check paths ionosphere sources (Auto default), PSK Reporter import files; README install path
     0.9.0
     - Import ADIF log (.adi / .adx): worked stations and QSO lines from wsjtx_log.adi, LoTW or any logger; duplicates across files merged with their confirmations; QSO lines work with Check paths and Station balance
     0.8.2

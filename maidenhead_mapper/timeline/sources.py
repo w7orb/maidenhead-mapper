@@ -6,7 +6,8 @@ A Source groups the layer(s) one dataset is drawn on and knows how to
 
     PskSource      a PSK Reporter station layer (Fetch / Import)
     LogSource      an ALL.TXT import or a saved live session: both layers,
-                   rebuilt by replaying the log for the window
+                   rebuilt by replaying the log for the window. A session
+                   GeoPackage loaded on its own is recognised from its tables.
     LiveSource     the running live map: its in-memory log; live updates
                    pause while a past window is shown
 """
@@ -23,6 +24,7 @@ from ..algorithms.import_psk import LAYER_PROPERTY, station_feature, station_fie
 from ..core import alltxt, live, psk, stations, timeline
 from ..core import exchange as x
 from ..live.exchange_layer import exchange_features
+from ..live.session import log_props
 
 
 class SourceError(Exception):
@@ -284,13 +286,9 @@ def discover():
             except (TypeError, ValueError, KeyError):
                 pass
             continue
-        raw = lyr.customProperty(LOG_PROPERTY)
-        if not raw:
-            continue
-        try:
-            props = json.loads(raw)
-            group = props["group"]
-        except (TypeError, ValueError, KeyError):
+        props = log_props(lyr)      # tagged, or recognised from a session GeoPackage
+        group = (props or {}).get("group")
+        if not group:
             continue
         groups.setdefault(group, (props, []))[1].append(lyr)
     for group, (props, layers) in groups.items():

@@ -114,6 +114,22 @@ def log_samples(log, my_grid=""):
     return out
 
 
+def path_samples(paths):
+    """(time, band, km) from paths read off a layer's features (ADIF QSOs,
+    exchange or station layers): each item is (time, [band names], grid_a,
+    grid_b). One sample per band; items without a time or valid grids are
+    skipped."""
+    out = []
+    for t, bands, ga, gb in paths:
+        if t is None or not (mh.is_valid(ga or "") and mh.is_valid(gb or "")):
+            continue
+        d = mh.distance_bearing(ga, gb)[0]
+        for b in bands:
+            if b:
+                out.append((t, b, d))
+    return out
+
+
 def summary_line(pairs):
     """'10m ~1,950 km, 20m ~620 km' from (band, km) pairs, bands with enough data."""
     from .bands import BAND_NAMES

@@ -80,6 +80,43 @@ class SessionStore:
         return len(feats) if ok else 0
 
 
+def log_props(layer, tag=True):
+    """The plugin's log properties for a layer (dict), or None.
+
+    Layers made by the plugin carry them as a custom property. A layer loaded
+    straight from a saved session GeoPackage (drag and drop, a new project)
+    doesn't, so they are inferred from the file (core.session_file) and, with
+    tag=True, stored on the layer so the rest of the plugin treats it the same.
+    """
+    import json
+    from qgis.core import QgsProviderRegistry
+    from ..algorithms.import_alltxt import LOG_PROPERTY
+    from ..core import session_file
+
+    if layer is None:
+        return None
+    raw = layer.customProperty(LOG_PROPERTY)
+    if raw:
+        try:
+            props = json.loads(raw)
+            return props if isinstance(props, dict) else None
+        except (TypeError, ValueError):
+            return None
+    try:
+        if layer.providerType() != "ogr":
+            return None
+    except AttributeError:          # not a vector layer
+        return None
+    parts = QgsProviderRegistry.instance().decodeUri("ogr", layer.source())
+    path, table = parts.get("path"), parts.get("layerName")
+    if not table:                   # single-table URI: not a session layer
+        return None
+    props = session_file.infer(path, table)
+    if props and tag:
+        layer.setCustomProperty(LOG_PROPERTY, json.dumps(props))
+    return props
+
+
 def read_log(path):
     """[(time, message)] from a saved session, in time order."""
     layer = QgsVectorLayer(f"{path}|layername=log", "log", "ogr")

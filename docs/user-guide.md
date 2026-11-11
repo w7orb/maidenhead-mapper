@@ -241,7 +241,8 @@ With *Save session to a GeoPackage* ticked, Start creates `wsjtx_session_YYYYMMD
 It is written every 2 seconds. The layers on the map **are** the file's tables, so nothing is lost if QGIS closes. Stopping and starting again with the same folder keeps writing the same file; choosing a different folder starts a new one.
 
 - **Choose a permanent folder**, such as `Documents\WSJT-X sessions`. Don't use a temporary folder: Windows or a cleaner may empty it.
-- The `log` table is what lets the [Activity timeline](#9-activity-timeline) and *Skip distance* replay any hours later. Save the QGIS project with the session layers in it so the timeline can find them again.
+- The `log` table is what lets the [Activity timeline](#9-activity-timeline), *Skip distance* and *Antenna A/B comparison* replay any hours later.
+- To reopen a session later, drag its `stations` and `exchanges` tables from the `.gpkg` into any project (or use *Layer → Add Layer → Add Vector Layer*). The plugin recognises a session file from its tables, so it doesn't matter which project it was recorded in.
 
 Without saving, the layers are temporary. Right-click → *Make Permanent* keeps the current state but not the log. If you delete a live layer while it runs, it is rebuilt on the next update.
 
@@ -296,9 +297,9 @@ Maps your logged QSOs from ADIF files: WSJT-X's `wsjtx_log.adi` (next to `ALL.TX
 **Outputs**
 
 - **Worked stations (ADIF)**: one point per callsign, coloured by band. See [fields](#103-adif-layers).
-- **QSOs (ADIF)**: one great-circle line per QSO, coloured by band. These lines have the **same fields as an exchange layer**, plus a few ADIF ones. You are `call_a`, so `a_hears_b` is the report you sent and `b_hears_a` the one you received. That makes the layer usable by *Check paths*, *Station balance* and *Find sporadic-E paths*.
+- **QSOs (ADIF)**: one great-circle line per QSO, coloured by band. These lines have the **same fields as an exchange layer**, plus a few ADIF ones. You are `call_a`, so `a_hears_b` is the report you sent and `b_hears_a` the one you received. That makes the layer usable by *Check paths*, *Station balance*, *Find sporadic-E paths* and *Skip distance by hour*.
 
-ADIF layers don't appear in the Activity timeline, and *Skip distance by hour* doesn't accept them. Use the layer's filter (right-click → *Filter…*) on `first_utc` to look at a period.
+ADIF layers don't appear in the Activity timeline: a log spanning years doesn't suit an hourly chart. Use the layer's filter (right-click → *Filter…*) on `first_utc` to look at a period.
 
 ### 7.4 Station balance from two-way reports
 
@@ -479,7 +480,12 @@ If the input has been through *Check paths*, its `f2_status` is used. With the C
 
 A table, per band and UTC hour, of how far contacts reached. It shows the skip zone growing and shrinking through the day.
 
-**Input**: a layer from *Fetch/Import PSK Reporter*, *Import ALL.TXT*, or a **saved** live session. The tool reads the raw data behind the layer, so a running live map without saving, and ADIF layers, are refused. Distances are from your grid.
+**Input**: any of these:
+
+- a layer from *Fetch/Import PSK Reporter*, *Import ALL.TXT*, a saved live session (also one loaded straight from its `.gpkg`) or the running live map. The tool reads the raw data behind the layer: every report or decode counts.
+- any other layer with grids: ADIF QSO lines or worked stations, or an exchange layer. Each feature counts as one contact per band, at its `last_utc` (or `first_utc`) time. Line layers use the distance between their two grids. A station layer has one row per station, so its hours count stations, not every contact.
+
+Otherwise distances are from your grid.
 
 | Field | Meaning |
 |---|---|
@@ -500,7 +506,7 @@ The top-level **Activity timeline** entry opens a panel under the map: a bar cha
 1. Choose a dataset at the top. The list holds:
    - PSK Reporter station layers;
    - ALL.TXT imports;
-   - saved live sessions;
+   - saved live sessions, including a session `.gpkg` loaded into a new project;
    - **WSJT-X live map (running)**.
 2. Bars show reports per hour:
    - PSK Reporter: blue = stations I heard, orange = stations that heard me.
@@ -534,7 +540,7 @@ From *Fetch/Import PSK Reporter*, the live map (*WSJT-X live*) and *Import ALL.T
 | `grid` | Locator the marker is placed at (the most recent one heard). |
 | `direction` | PSK Reporter: `heard` (I decoded them) or `heard_me` (they decoded me). WSJT-X: `heard`, or `worked` for logged QSOs. |
 | `reports` | Number of reports or decodes. |
-| `snr_best`, `snr_median`, `snr_last` | SNR in dB. `snr_median` is empty on WSJT-X layers. |
+| `snr_best`, `snr_median`, `snr_last` | SNR in dB. On WSJT-X layers the median covers every decode of the station (in the chosen hours, for the timeline). |
 | `bands`, `modes` | Comma-separated, low to high frequency. |
 | `first_utc`, `last_utc` | First and last time heard. |
 | `distance_km`, `bearing_deg` | From your grid. |
@@ -695,11 +701,14 @@ The input isn't a station or exchange layer: for example *Ionosondes* or a conto
 **"Enter My grid: station layers are paths from you"**
 Station-layer paths start at your grid. Enter it in *My grid*.
 
-**Skip distance: "This layer doesn't come from…" or "A running live map has no saved log"**
-The tool needs the raw data behind the layer. Use a PSK Reporter or ALL.TXT layer, or a live session saved to a GeoPackage.
+**Skip distance: "This layer has no raw data to read and no usable paths"**
+The layer has no grid fields (for example the Maidenhead grid or the ionosonde layer). Use a PSK Reporter, ALL.TXT, session, live or ADIF layer, or any layer with `grid_a`/`grid_b` or `grid` fields plus a band and a time.
+
+**Skip distance: "This live map is no longer running and wasn't saved"**
+An unsaved live map's decodes are kept only while it runs. Tick *Save session to a GeoPackage* before pressing Start next time.
 
 **The Activity timeline doesn't list my layer**
-It lists layers made by the PSK Reporter tools, *Import ALL.TXT* and the live map, as tagged when they were created. A session GeoPackage dragged into a new project isn't tagged; open the project the session was recorded in instead. ADIF layers are not listed.
+It lists layers made by the PSK Reporter tools, *Import ALL.TXT* and the live map, and session GeoPackages loaded from the `.gpkg` (recognised by their `stations`, `exchanges` and `log` tables). Load the `stations` or `exchanges` table, not `log`. ADIF layers are not listed.
 
 **PSK Reporter: "wait N min"**
 PSK Reporter allows one query per 5 minutes. Wait, or map what you already have with *Import PSK Reporter reports*.
