@@ -97,3 +97,16 @@ def test_real_alltxt():
     assert len(tr.exchanges) == 131 and c[x.CONFIRMED] == 18
     pair = [e for e in tr.exchanges.values() if {e.a, e.b} == {"AH6U", "N5ER"}][0]
     assert pair.stage == x.CONFIRMED and pair.b_hears_a == 7 and pair.a_hears_b == -4
+
+
+def test_contrasts():
+    tr = x.ExchangeTracker()
+    ex = feed(tr, [("AH6U N5ER EM34", -12), ("N5ER AH6U +07", -13), ("AH6U N5ER R-04", -12)])
+    # A=N5ER, B=AH6U. AH6U heard N5ER at +07, N5ER heard AH6U at -04;
+    # I heard N5ER at -12 and AH6U at -13.
+    report_diff, b_vs_me, a_vs_me = ex.contrasts()
+    assert report_diff == 7 - (-4)          # N5ER's (power + noise floor) 11 dB above AH6U's
+    assert b_vs_me == 7 - (-12)             # AH6U heard N5ER 19 dB better than I did
+    assert a_vs_me == -4 - (-13)            # N5ER heard AH6U 9 dB better than I did
+    one = feed(x.ExchangeTracker(), [("K1ABC W9XYZ -10", -5)])
+    assert one.contrasts() == (None, None, None)          # one report, and I never heard K1ABC

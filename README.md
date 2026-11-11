@@ -145,7 +145,12 @@ With only WSJT-X and QGIS, *Unicast* on `127.0.0.1:2237` (the WSJT-X default) al
   N5ER AH6U RR73     signed off: confirmed
   ```
 
-  Fields: `a_hears_b`, `b_hears_a` (reports exchanged), `me_hears_a`, `me_hears_b` (your decodes), `stage` (started / one report / both reports / confirmed), `paths` (label, e.g. `N5ER→AH6U +07  AH6U→N5ER -04`, read as "signal from → to, arrived at"), `transcript`, `band`, `distance_km`. Messages between the same pair and band within 3 minutes belong to one exchange.
+  Fields: `a_hears_b`, `b_hears_a` (reports exchanged), `me_hears_a`, `me_hears_b` (your decodes), `stage` (started / one report / both reports / confirmed), `paths` (label, e.g. `N5ER→AH6U +07  AH6U→N5ER -04`, read as "signal from → to, arrived at"), `transcript`, `band`, `distance_km`, and what you see compared with what they see:
+  - `b_vs_me_db`: how B heard A minus how you heard A (positive = B heard that signal better than you);
+  - `a_vs_me_db`: how A heard B minus how you heard B;
+  - `report_diff_db`: B's report of A minus A's report of B. Path and antennas cancel, leaving A's (power + receiver noise) minus B's.
+
+  Single exchanges mix receivers with path differences. *Station balance from two-way reports* takes medians per station over many exchanges. Messages between the same pair and band within 3 minutes belong to one exchange.
 - Your own QSOs are included (your side comes from WSJT-X's Status and QSO Logged, since your own transmissions aren't decoded); filter on `involves_me = 1` to see only those. Colours: green = confirmed, blue = both reports, dashed purple = one report, dotted grey = started. Lines fade like markers; report labels appear when zoomed in past 1:10M.
 - Every station and exchange has `hops` and `takeoff_deg`: the fewest F2 hops (layer at 300 km, takeoff of at least 2°) that can cover the distance, and the takeoff angle that needs. This is geometry only: real paths may use more hops, a different layer height, or sporadic-E.
 - **Save session to a GeoPackage**: tick it and choose a folder before Start. Each new session file is `wsjtx_session_YYYYMMDD_HHMMSS.gpkg` with `stations`, `exchanges` and a `log` of every WSJT-X message, written every 2 s. The layers on the map *are* the file's tables, so nothing is lost if QGIS closes, and the timeline can replay any hours from the log later.

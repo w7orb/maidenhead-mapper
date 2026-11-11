@@ -85,7 +85,8 @@ class SyncedLayer:
         f = QgsFeature(self.layer.fields())
         f.setGeometry(geom)
         for i, v in zip(self._idx, attrs):
-            f.setAttribute(i, v)
+            if i >= 0:
+                f.setAttribute(i, v)
         return f
 
     def sync(self, keys):
@@ -106,7 +107,7 @@ class SyncedLayer:
             if fid is None:
                 new.append((key, self._feature(geom, attrs)))
             else:
-                attr_changes[fid] = dict(zip(self._idx, attrs))
+                attr_changes[fid] = {i: v for i, v in zip(self._idx, attrs) if i >= 0}
                 geom_changes[fid] = geom
         if new:
             ok, added = dp.addFeatures([f for _, f in new])

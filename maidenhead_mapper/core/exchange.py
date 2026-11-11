@@ -57,6 +57,20 @@ class Exchange:
             return CONFIRMED
         return (STARTED, ONE_REPORT, BOTH_REPORTS)[reports]
 
+    def contrasts(self):
+        """(report_diff, b_vs_me, a_vs_me) in dB, None where a number is missing.
+
+        report_diff = how B heard A minus how A heard B: path and antennas
+                      cancel, leaving A's (power + noise floor) minus B's
+        b_vs_me     = how B heard A minus how I heard A
+        a_vs_me     = how A heard B minus how I heard B
+        Positive *_vs_me: they heard that signal better than I did.
+        """
+        def diff(x, y):
+            return None if x is None or y is None else x - y
+        return (diff(self.b_hears_a, self.a_hears_b), diff(self.b_hears_a, self.me_hears_a),
+                diff(self.a_hears_b, self.me_hears_b))
+
     def other(self, call):
         return self.b if call == self.a else self.a
 

@@ -33,6 +33,7 @@ FIELDS = [
     ("paths", STRING, 80), ("involves_me", INT, 0), ("logged", INT, 0), ("messages", INT, 0),
     ("transcript", STRING, 254), ("first_utc", DATETIME, 0), ("last_utc", DATETIME, 0), ("distance_km", DOUBLE, 0),
     ("hops", INT, 0), ("takeoff_deg", DOUBLE, 0),
+    ("report_diff_db", INT, 0), ("b_vs_me_db", INT, 0), ("a_vs_me_db", INT, 0),
 ]
 
 # (filter, label, colour, width mm, dash pattern or None); first match wins
@@ -122,7 +123,7 @@ def exchange_attrs(ex, ga, gb):
         paths_text(ex), int(ex.involves_me), int(ex.logged), ex.messages, ex.transcript()[:254],
         utc_qdatetime(ex.first_utc) if ex.first_utc else None,
         utc_qdatetime(ex.last_utc) if ex.last_utc else None,
-        dist, n, takeoff,
+        dist, n, takeoff, *ex.contrasts(),
     ]
 
 
