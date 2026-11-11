@@ -82,3 +82,36 @@ def test_distance_bearing():
     assert d == 0.0
     d, _ = mh.distance_bearing("CN85", "IO91")  # Portland -> London ~7900 km
     assert 7700 < d < 8100
+
+
+def test_extended_precision():
+    w, s, e, n = mh.bounds("CN85pl12ab")
+    assert e - w == pytest.approx(2 / 5760) and n - s == pytest.approx(1 / 5760)
+    # each longer locator sits inside its prefix
+    for loc in ("CN85pl12ab", "EM25tj70bd", "RR99xx99xx", "AA00aa00aa"):
+        for k in (2, 4, 6, 8):
+            pw, ps, pe, pn = mh.bounds(loc[:k])
+            cw, cs, ce, cn = mh.bounds(loc)
+            assert pw <= cw and ps <= cs and ce <= pe + 1e-12 and cn <= pn + 1e-12
+
+
+def test_extended_round_trip_and_case():
+    # lon remainder in the 8-char cell is 16.08 tenth-cells -> 'q'
+    assert mh.to_locator(45.495115, -122.677748, 10) == "CN85pl88qt"
+    assert mh.to_locator(45.495, -122.678, 10) == "CN85pl88pt"
+    lon, lat = mh.center("cn85pl88pt")
+    assert mh.to_locator(lat, lon, 10) == "CN85pl88pt"
+    assert mh.display("cn85PL12AB") == "CN85pl12ab"
+
+
+def test_truncate():
+    assert mh.truncate("cn85pl12ab", 6) == "CN85PL"
+    assert mh.truncate("CN85", 6) == "CN85"
+    assert mh.truncate("CN85", None) == "CN85"
+    with pytest.raises(ValueError):
+        mh.truncate("CN85", 5)
+
+
+@pytest.mark.parametrize("bad", ["CN85pl1", "CN85pl1a", "CN85plaa", "CN85pl12a", "CN85pl12yz", "CN85pl12ab1"])
+def test_invalid_extended(bad):
+    assert not mh.is_valid(bad)

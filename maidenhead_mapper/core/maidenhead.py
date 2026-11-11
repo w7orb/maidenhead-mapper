@@ -3,9 +3,11 @@
 Pure Python: no QGIS imports, so it can be unit-tested with plain pytest.
 
 Locator levels (pairs of characters):
-    field      2 chars  A-R A-R   20 deg lon x 10 deg lat
-    square     4 chars  0-9 0-9    2 deg lon x  1 deg lat
-    subsquare  6 chars  a-x a-x    5' lon x 2.5' lat
+    field              2 chars  A-R A-R   20 deg lon x 10 deg lat
+    square             4 chars  0-9 0-9    2 deg lon x  1 deg lat
+    subsquare          6 chars  a-x a-x    5' lon x 2.5' lat
+    extended square    8 chars  0-9 0-9   30" lon x 15" lat
+    extended subsq.   10 chars  a-x a-x   1.25" lon x 0.625" lat
 
 The grid always covers exactly -180..180 lon / -90..90 lat. It is never
 derived from a basemap extent: Web Mercator stops at +/-85.0511 deg, which
@@ -21,14 +23,18 @@ from typing import Iterator, Optional, Tuple
 WORLD = (-180.0, -90.0, 180.0, 90.0)  # west, south, east, north
 
 # (lon size, lat size, number of divisions, alphabet) for each pair.
+_DIGITS, _LETTERS24 = "0123456789", "ABCDEFGHIJKLMNOPQRSTUVWX"
 _PAIRS = (
     (20.0, 10.0, 18, "ABCDEFGHIJKLMNOPQR"),
-    (2.0, 1.0, 10, "0123456789"),
-    (2.0 / 24.0, 1.0 / 24.0, 24, "ABCDEFGHIJKLMNOPQRSTUVWX"),
+    (2.0, 1.0, 10, _DIGITS),
+    (2.0 / 24, 1.0 / 24, 24, _LETTERS24),
+    (2.0 / 240, 1.0 / 240, 10, _DIGITS),
+    (2.0 / 5760, 1.0 / 5760, 24, _LETTERS24),
 )
 
-FIELD, SQUARE, SUBSQUARE = 2, 4, 6
-_VALID = re.compile(r"^[A-R]{2}(?:[0-9]{2}(?:[A-X]{2})?)?$")
+FIELD, SQUARE, SUBSQUARE, EXT_SQUARE, EXT_SUBSQUARE = 2, 4, 6, 8, 10
+PRECISIONS = (FIELD, SQUARE, SUBSQUARE, EXT_SQUARE, EXT_SUBSQUARE)
+_VALID = re.compile(r"^[A-R]{2}(?:[0-9]{2}(?:[A-X]{2}(?:[0-9]{2}(?:[A-X]{2})?)?)?)?$")
 
 EARTH_RADIUS_KM = 6371.0088
 
@@ -41,8 +47,24 @@ def normalize(locator: str) -> str:
 
 
 def is_valid(locator: str) -> bool:
-    """True for a well-formed 2, 4 or 6 character locator (any case)."""
+    """True for a well-formed 2, 4, 6, 8 or 10 character locator (any case)."""
     return bool(_VALID.match(normalize(locator)))
+
+
+def truncate(locator: str, max_chars: Optional[int]) -> str:
+    """Normalize and cap a valid locator at `max_chars` (None = keep all)."""
+    loc = normalize(locator)
+    if max_chars is not None:
+        if max_chars not in PRECISIONS:
+            raise ValueError(f"max_chars must be one of {PRECISIONS}")
+        loc = loc[:max_chars]
+    return loc
+
+
+def display(locator: str) -> str:
+    """Conventional display case: CN85pl, CN85pl12ab."""
+    loc = normalize(locator)
+    return loc[:4] + loc[4:6].lower() + loc[6:8] + loc[8:10].lower()
 
 
 def bounds(locator: str) -> Bounds:
@@ -66,9 +88,9 @@ def center(locator: str) -> Tuple[float, float]:
 
 
 def to_locator(lat: float, lon: float, precision: int = SQUARE) -> str:
-    """Convert a lat/lon to a locator of `precision` characters (2, 4 or 6)."""
-    if precision not in (FIELD, SQUARE, SUBSQUARE):
-        raise ValueError("precision must be 2, 4 or 6")
+    """Convert a lat/lon to a locator of `precision` characters (2-10, even)."""
+    if precision not in PRECISIONS:
+        raise ValueError(f"precision must be one of {PRECISIONS}")
     if not -90.0 <= lat <= 90.0:
         raise ValueError(f"latitude out of range: {lat}")
     # Wrap longitude into [-180, 180); the north pole belongs to the top row.
@@ -83,8 +105,7 @@ def to_locator(lat: float, lon: float, precision: int = SQUARE) -> str:
         out.append(alphabet[xi] + alphabet[yi])
         x -= xi * lon_size
         y -= yi * lat_size
-    loc = "".join(out)
-    return loc[:4] + loc[4:].lower()
+    return display("".join(out))
 
 
 def iter_cells(precision: int, extent: Optional[Bounds] = None) -> Iterator[Tuple[str, Bounds]]:

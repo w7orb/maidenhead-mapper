@@ -11,6 +11,7 @@ MENU = "&Maidenhead Mapper"
 # (algorithm id, menu text)
 ACTIONS = [
     ("maidenhead:create_grid", "Create Maidenhead grid…"),
+    ("maidenhead:import_psk", "Import PSK Reporter reports…"),
 ]
 
 

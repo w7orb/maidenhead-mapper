@@ -6,6 +6,7 @@ from qgis.core import QgsProcessingProvider
 from qgis.PyQt.QtGui import QIcon
 
 from .algorithms.create_grid import CreateGridAlgorithm
+from .algorithms.import_psk import ImportPskAlgorithm
 
 ICON = os.path.join(os.path.dirname(__file__), "icons", "icon.svg")
 
@@ -22,4 +23,4 @@ class MaidenheadProvider(QgsProcessingProvider):
 
     def loadAlgorithms(self):  # noqa: N802
         self.addAlgorithm(CreateGridAlgorithm())
-        # Phase 2: self.addAlgorithm(ImportWsjtxAlgorithm())
+        self.addAlgorithm(ImportPskAlgorithm())

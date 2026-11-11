@@ -25,18 +25,14 @@ from qgis.core import (
     QgsVectorLayerSimpleLabeling,
     QgsWkbTypes,
 )
-from qgis.PyQt.QtCore import QCoreApplication, QMetaType, QVariant
+from qgis.PyQt.QtCore import QCoreApplication
 from qgis.PyQt.QtGui import QColor, QFont
 
 from ..core import maidenhead as mh
+from .qt_compat import INT as _INT
+from .qt_compat import STRING as _STRING
 
 WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
-
-# QGIS 3.38 switched QgsField from QVariant.Type to QMetaType.Type.
-if Qgis.QGIS_VERSION_INT >= 33800:
-    _STRING, _INT = QMetaType.Type.QString, QMetaType.Type.Int
-else:
-    _STRING, _INT = QVariant.String, QVariant.Int
 
 # Post-processors must outlive the algorithm run; QGIS only holds a raw pointer.
 _post_processors = []
@@ -73,9 +69,12 @@ class _GridStyler(QgsProcessingLayerPostProcessorInterface):
         settings.placement = Qgis.LabelPlacement.OverPoint
         settings.setFormat(fmt)
         if not is_field:
-            # 32,400 square labels are unreadable at world scale.
+            # 32,400 squares are an unreadable mesh at world scale: hide the
+            # layer beyond 1:20M and its labels beyond 1:15M.
+            layer.setScaleBasedVisibility(True)
+            layer.setMinimumScale(20_000_000)  # most zoomed-out scale shown
             settings.scaleVisibility = True
-            settings.minimumScale = 15_000_000  # most zoomed-out scale shown
+            settings.minimumScale = 15_000_000
         layer.setLabeling(QgsVectorLayerSimpleLabeling(settings))
         layer.setLabelsEnabled(True)
         layer.triggerRepaint()
