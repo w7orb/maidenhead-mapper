@@ -1,7 +1,7 @@
+import datetime as dt
 import json
 import os
 
-import pandas as pd
 import pytest
 
 from maidenhead_mapper.core import psk, stations
@@ -13,6 +13,14 @@ MISC2 = os.path.join(os.path.dirname(__file__), "..", "..", "pskreporter-analyti
 def rep(sender, receiver, t, snr=-10, freq=14074000, sloc="CN85on", rloc="CN85on", mode="FT8"):
     return {"senderCallsign": sender, "receiverCallsign": receiver, "senderLocator": sloc,
             "receiverLocator": rloc, "flowStartSeconds": t, "frequency": freq, "sNR": snr, "mode": mode}
+
+
+def utc(seconds):
+    return dt.datetime.fromtimestamp(seconds, dt.timezone.utc)
+
+
+def load(folder):
+    return psk.add_remote_station(psk.load_reports(str(folder)), ME)
 
 
 def write(folder, name, reports):
@@ -38,26 +46,30 @@ def folder(tmp_path):
 
 def test_load_dedupes_and_lists_skipped(folder):
     with pytest.warns(UserWarning, match="psk_3.json"):
-        df = psk.load_reports(str(folder))
-    assert len(df) == 7
-    assert df.attrs["skipped_files"] == ["psk_3.json"] and df.attrs["files_read"] == 2
-    assert df.loc[df["flowStartSeconds"] == 2000, "copies"].item() == 2
+        reports = psk.load_reports(str(folder))
+    assert len(reports) == 7
+    assert reports.skipped_files == ["psk_3.json"] and reports.files_read == 2
+    dup = [r for r in reports if r["flowStartSeconds"] == 2000]
+    assert len(dup) == 1 and dup[0]["copies"] == 2
+    assert dup[0]["firstSeenFile"] == "psk_1.json" and dup[0]["sourceFile"] == "psk_2.json"
+    assert dup[0]["time"] == utc(2000)
 
 
 def test_non_ascii_file_loads(tmp_path):
     write(tmp_path, "psk_1.json", [dict(rep("F1ABC", ME, 1), senderRegion="Île-de-France")])
-    assert psk.load_reports(str(tmp_path))["senderRegion"].item() == "Île-de-France"
+    assert psk.load_reports(str(tmp_path))[0]["senderRegion"] == "Île-de-France"
 
 
 def test_directions(folder):
     with pytest.warns(UserWarning):
-        df = psk.add_remote_station(psk.load_reports(str(folder)), ME)
-    by_t = df.set_index("flowStartSeconds")
-    assert by_t.loc[1000, "direction"] == "heard" and by_t.loc[1000, "remoteCallsign"] == "K1ABC"
-    assert by_t.loc[1500, "direction"] == "heard_me" and by_t.loc[1500, "remoteLocator"] == "JO62qm"
-    assert by_t.loc[1600, "direction"] == "heard_me"
-    assert by_t.loc[1700, "direction"] == "self"
-    assert by_t.loc[1800, "direction"] is None
+        reports = load(folder)
+    by_t = {r["flowStartSeconds"]: r for r in reports}
+    assert by_t[1000]["direction"] == "heard" and by_t[1000]["remoteCallsign"] == "K1ABC"
+    assert by_t[1000]["myLocator"] == "CN85on"
+    assert by_t[1500]["direction"] == "heard_me" and by_t[1500]["remoteLocator"] == "JO62qm"
+    assert by_t[1600]["direction"] == "heard_me"
+    assert by_t[1700]["direction"] == "self" and by_t[1700]["remoteCallsign"] == ME
+    assert by_t[1800]["direction"] is None and by_t[1800]["remoteCallsign"] is None
 
 
 def test_base_callsign():
@@ -68,43 +80,44 @@ def test_base_callsign():
 
 def test_summarize(folder):
     with pytest.warns(UserWarning):
-        df = psk.add_remote_station(psk.load_reports(str(folder)), ME)
-    rows, st = stations.summarize(df)
+        reports = load(folder)
+    rows, st = stations.summarize(reports)
     assert (st.self_spots, st.no_direction, st.no_locator, st.stations) == (1, 1, 1, 3)
     by = {(r.call, r.direction): r for r in rows}
     k = by[("K1ABC", "heard")]
     assert k.reports == 2 and k.grid == "FN42ab"           # latest locator wins
     assert (k.snr_best, k.snr_median, k.snr_last) == (-5, -10.0, -5)
     assert k.bands == "40m,20m" and k.modes == "FT8"
-    assert k.first_utc == pd.Timestamp(1000, unit="s", tz="UTC").to_pydatetime()
+    assert k.first_utc == utc(1000) and k.last_utc == utc(2000)
     assert k.distance_km > 3000 and 50 < k.bearing_deg < 90  # Portland -> New England
-    assert stations.guess_my_grid(df) == "CN85on"
+    assert stations.guess_my_grid(reports) == "CN85on"
     assert by[("DL1XYZ", "heard_me")].grid == "JO62qm"
     assert by[("JA1AAA", "heard_me")].lon == pytest.approx(139.0)
 
 
 def test_summarize_filters_and_precision(folder):
     with pytest.warns(UserWarning):
-        df = psk.add_remote_station(psk.load_reports(str(folder)), ME)
-    rows, st = stations.summarize(df, directions=("heard",), precision=4)
+        reports = load(folder)
+    rows, st = stations.summarize(reports, directions=("heard",), precision=4)
     assert [(r.call, r.grid) for r in rows] == [("K1ABC", "FN42")]
-    rows, _ = stations.summarize(df, bands=["40m"])
+    rows, _ = stations.summarize(reports, bands=["40m"])
     assert [(r.call, r.reports, r.bands) for r in rows] == [("K1ABC", 1, "40m")]
-    rows, _ = stations.summarize(df, start=pd.Timestamp(1550, unit="s", tz="UTC"))
+    rows, _ = stations.summarize(reports, start=utc(1550))
     assert {r.call for r in rows} == {"JA1AAA", "K1ABC"}
 
 
 def test_summarize_empty():
-    rows, st = stations.summarize(pd.DataFrame())
+    rows, st = stations.summarize([])
     assert rows == [] and st.stations == 0
 
 
 @pytest.mark.skipif(not os.path.isdir(MISC2), reason="pskreporter-analytics data not checked out alongside")
 def test_real_misc2():
-    df = psk.add_remote_station(psk.load_reports(MISC2), ME)
-    assert df["direction"].value_counts().to_dict() == {"heard": 12371, "heard_me": 737, "self": 2}
-    rows, st = stations.summarize(df)
+    reports = psk.add_remote_station(psk.load_reports(MISC2), ME)
+    from collections import Counter
+    assert Counter(r["direction"] for r in reports) == {"heard": 12371, "heard_me": 737, "self": 2}
+    rows, st = stations.summarize(reports)
     assert st.stations == len(rows) == 5336
-    assert stations.guess_my_grid(df) == "CN85on"
+    assert stations.guess_my_grid(reports) == "CN85on"
     # Reports of my own signal are placed at the receiver, never all at my square
     assert not any(r.direction == "heard_me" and r.grid.upper().startswith("CN85ON") for r in rows)

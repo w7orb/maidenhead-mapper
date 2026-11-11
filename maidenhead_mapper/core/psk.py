@@ -1,28 +1,36 @@
-"""PSK Reporter file loading and direction labelling.
+"""PSK Reporter file loading and direction labelling. Pure Python.
 
-Vendored from pskreporter-analytics `src/psktools.py` at commit 4a94e80
-(https://github.com/cwtews/pskreporter-analytics). Changes from the original:
-  - `add_remote_station` no longer adds Lat/Lon; positions come from
-    `maidenhead.center` in `stations.py`, so the plugin has one locator
-    implementation.
-  - `load_reports` collects skipped file names on the returned frame's
-    `attrs['skipped_files']` instead of only warning, so the Processing log
-    can report them.
-
-Requires pandas (bundled with QGIS 3.34+ on Windows, macOS and most Linux
-packages). No QGIS imports.
+Adapted from pskreporter-analytics `src/psktools.py` at commit 4a94e80
+(https://github.com/cwtews/pskreporter-analytics, GPLv3, same author).
+Changes from the original:
+  - No pandas: reports are plain dicts (the JSON objects as PSK Reporter sends
+    them) plus a few added keys, so the plugin has no outside dependencies.
+  - `add_remote_station` adds no Lat/Lon; positions come from
+    `maidenhead.center`, so the plugin has one locator implementation.
+  - `load_reports` returns the skipped file names (`.skipped_files`) instead
+    of only warning, so the Processing log can list them.
+No QGIS imports.
 """
 
+import datetime as _dt
 import json
 import os
 import warnings
 
-import pandas as pd
-
 # Identifies one reception report. Pulls whose time windows overlap return the
 # same report again; those copies are identical apart from occasional
 # corrections PSK Reporter makes to details like the sender's locator.
-REPORT_KEY = ["senderCallsign", "receiverCallsign", "flowStartSeconds", "frequency"]
+REPORT_KEY = ("senderCallsign", "receiverCallsign", "flowStartSeconds", "frequency")
+
+# Saved pulls are named psk_YYYY_MM_DD-HH_MM_SS.json (pull time, UTC)
+FILE_PREFIX, FILE_SUFFIX = "psk_", ".json"
+
+
+class Reports(list):
+    """A list of report dicts, plus what happened while loading them."""
+
+    files_read = 0
+    skipped_files = ()
 
 
 def read_psk_file(path):
@@ -33,49 +41,62 @@ def read_psk_file(path):
 
 def iter_psk_files(data_dir):
     """Sorted psk_*.json file names in a folder (names sort by pull time)."""
-    return [n for n in sorted(os.listdir(data_dir)) if n.startswith("psk_") and n.endswith(".json")]
+    return [n for n in sorted(os.listdir(data_dir)) if n.startswith(FILE_PREFIX) and n.endswith(FILE_SUFFIX)]
+
+
+def report_time(seconds):
+    """flowStartSeconds -> tz-aware UTC datetime, or None."""
+    try:
+        return _dt.datetime.fromtimestamp(int(seconds), _dt.timezone.utc)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return None
 
 
 def load_reports(data_dir, dedupe=True, progress=None):
     """Load receptionReport entries from every psk_*.json file in a folder.
 
-    Empty or corrupted files are skipped (listed in df.attrs['skipped_files']).
-    With dedupe (default) each report appears once, from the latest file that
-    has it, with `copies` and `firstSeenFile` columns.
+    Each report is the JSON dict plus `sourceFile` and `time` (UTC datetime or
+    None). With dedupe (default) each report appears once, taken from the
+    latest file that has it, with `copies` and `firstSeenFile` added.
+    Empty or corrupt files are skipped and listed in `.skipped_files`.
     `progress(i, n)` is called per file if given.
     """
     names = iter_psk_files(data_dir)
-    frames, bad_files = [], []
+    rows, bad_files = [], []
     for i, name in enumerate(names):
         if progress:
             progress(i, len(names))
         try:
-            reports = read_psk_file(os.path.join(data_dir, name)).get("receptionReport", [])
+            data = read_psk_file(os.path.join(data_dir, name))
         except ValueError:  # includes JSONDecodeError and UnicodeDecodeError
             bad_files.append(name)
             continue
-        if reports:
-            df = pd.DataFrame(reports)
-            df["sourceFile"] = name
-            frames.append(df)
+        for r in (data.get("receptionReport") or []) if isinstance(data, dict) else []:
+            if isinstance(r, dict):
+                r["sourceFile"] = name
+                r["time"] = report_time(r.get("flowStartSeconds"))
+                rows.append(r)
 
     if bad_files:
         warnings.warn(f"{data_dir}: skipped {len(bad_files)} unreadable file(s): {', '.join(bad_files)}")
 
-    if not frames:
-        df = pd.DataFrame(columns=["sourceFile", "time"] + (["copies", "firstSeenFile"] if dedupe else []))
-    else:
-        df = pd.concat(frames, ignore_index=True)
-        df["time"] = pd.to_datetime(df["flowStartSeconds"], unit="s", utc=True)
-        if dedupe:
-            copies = df.groupby(REPORT_KEY, dropna=False)["sourceFile"]
-            df["copies"] = copies.transform("size")
-            df["firstSeenFile"] = copies.transform("first")
-            df = df.drop_duplicates(REPORT_KEY, keep="last").reset_index(drop=True)
+    if dedupe:
+        latest, copies, first_file = {}, {}, {}
+        for r in rows:
+            key = tuple(r.get(k) for k in REPORT_KEY)
+            copies[key] = copies.get(key, 0) + 1
+            first_file.setdefault(key, r["sourceFile"])
+            latest.pop(key, None)  # re-insert so order follows the last copy
+            latest[key] = r
+        rows = []
+        for key, r in latest.items():
+            r["copies"], r["firstSeenFile"] = copies[key], first_file[key]
+            rows.append(r)
 
-    df.attrs["files_read"] = len(names) - len(bad_files)
-    df.attrs["skipped_files"] = bad_files
-    return df
+    out = Reports(rows)
+    out.files_read = len(names) - len(bad_files)
+    out.skipped_files = bad_files
+    return out
 
 
 def base_callsign(call):
@@ -90,10 +111,10 @@ def base_callsign(call):
     return max(parts, key=len) if parts else None
 
 
-def add_remote_station(df, mycall):
+def add_remote_station(reports, mycall):
     """Label each report by direction relative to `mycall`; name the other end.
 
-    Adds:
+    Adds to every report dict (and returns the same list):
       direction       'heard' (I received them), 'heard_me' (they received me),
                       'self' (my receiver decoded my signal), None (neither side)
       remoteCallsign  the other station's callsign
@@ -104,32 +125,20 @@ def add_remote_station(df, mycall):
     if me is None:
         raise ValueError(f"mycall must be a callsign, not {mycall!r}")
 
-    def side(col):
-        if col not in df.columns:
-            return pd.Series(False, index=df.index)
-        return df[col].map(base_callsign) == me
-
-    rx_is_me = side("receiverCallsign")
-    tx_is_me = side("senderCallsign")
-    i_received = rx_is_me & ~tx_is_me
-    i_self = rx_is_me & tx_is_me
-    i_sent = tx_is_me & ~rx_is_me
-
-    df["direction"] = None
-    df.loc[i_received, "direction"] = "heard"
-    df.loc[i_sent, "direction"] = "heard_me"
-    df.loc[i_self, "direction"] = "self"
-    i_sent = i_sent | i_self  # the "other" end of a self-spot is the receiver
-
-    def pick(when_received, when_sent):
-        out = pd.Series(None, index=df.index, dtype=object)
-        if when_received in df.columns:
-            out[i_received] = df.loc[i_received, when_received]
-        if when_sent in df.columns:
-            out[i_sent] = df.loc[i_sent, when_sent]
-        return out
-
-    df["remoteCallsign"] = pick("senderCallsign", "receiverCallsign")
-    df["remoteLocator"] = pick("senderLocator", "receiverLocator")
-    df["myLocator"] = pick("receiverLocator", "senderLocator")
-    return df
+    for r in reports:
+        rx_me = base_callsign(r.get("receiverCallsign")) == me
+        tx_me = base_callsign(r.get("senderCallsign")) == me
+        if rx_me and not tx_me:
+            r["direction"] = "heard"
+            remote, mine = "sender", "receiver"
+        elif tx_me:
+            # A self-spot's "other end" is the receiver, so it sits where heard
+            r["direction"] = "self" if rx_me else "heard_me"
+            remote, mine = "receiver", "sender"
+        else:
+            r["direction"] = r["remoteCallsign"] = r["remoteLocator"] = r["myLocator"] = None
+            continue
+        r["remoteCallsign"] = r.get(remote + "Callsign")
+        r["remoteLocator"] = r.get(remote + "Locator")
+        r["myLocator"] = r.get(mine + "Locator")
+    return reports

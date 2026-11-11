@@ -16,6 +16,6 @@ def field(name, kind, length=0):
 
 
 def utc_qdatetime(dt):
-    """Python/pandas datetime (tz-aware) -> QDateTime in UTC."""
+    """tz-aware Python datetime -> QDateTime in UTC."""
     secs = int(dt.timestamp())
     return QDateTime.fromSecsSinceEpoch(secs, Qt.TimeSpec.UTC)

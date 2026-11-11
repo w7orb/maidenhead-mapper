@@ -25,6 +25,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QCoreApplication
 
 from ..core import maidenhead as mh
+from ..core import psk, stations
 from ..core.bands import BAND_NAMES
 from . import styling
 from .qt_compat import DATETIME, DOUBLE, INT, STRING, field, utc_qdatetime
@@ -133,21 +134,14 @@ class ImportPskAlgorithm(QgsProcessingAlgorithm):
             self.OUTPUT, self.tr("PSK Reporter stations"), QgsProcessing.TypeVectorPoint))
 
     def _timestamp(self, parameters, name, context):
-        import pandas as pd
         if not parameters.get(name):
             return None
         qdt = self.parameterAsDateTime(parameters, name, context)
         if not qdt.isValid():
             return None
-        return pd.Timestamp(qdt.toSecsSinceEpoch(), unit="s", tz="UTC")
+        return psk.report_time(qdt.toSecsSinceEpoch())
 
     def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
-        try:
-            from ..core import psk, stations
-        except ImportError as exc:
-            raise QgsProcessingException(
-                self.tr("This tool needs the pandas Python package, which this QGIS install lacks: {}").format(exc))
-
         folder = self.parameterAsFile(parameters, self.INPUT, context)
         if not folder or not os.path.isdir(folder):
             raise QgsProcessingException(self.tr("Not a folder: {}").format(folder))
@@ -171,19 +165,19 @@ class ImportPskAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText(self.tr("Reading files…"))
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")  # skipped files are reported below
-            df = psk.load_reports(folder, progress=lambda i, n: feedback.setProgress(80.0 * i / max(n, 1)))
-        feedback.pushInfo(self.tr("{} file(s) read, {} unique report(s)").format(df.attrs.get("files_read", 0), len(df)))
-        for name in df.attrs.get("skipped_files", []):
+            reports = psk.load_reports(folder, progress=lambda i, n: feedback.setProgress(80.0 * i / max(n, 1)))
+        feedback.pushInfo(self.tr("{} file(s) read, {} unique report(s)").format(reports.files_read, len(reports)))
+        for name in reports.skipped_files:
             feedback.reportError(self.tr("Skipped unreadable file: {}").format(name))
-        if df.empty:
+        if not reports:
             raise QgsProcessingException(self.tr("No reception reports found in {}").format(folder))
 
-        df = psk.add_remote_station(df, mycall)
+        psk.add_remote_station(reports, mycall)
         summary, st = stations.summarize(
-            df, precision=precision, my_grid=my_grid, directions=directions, bands=bands,
+            reports, precision=precision, my_grid=my_grid, directions=directions, bands=bands,
             start=self._timestamp(parameters, self.START, context),
             end=self._timestamp(parameters, self.END, context))
-        my_grid = my_grid or stations.guess_my_grid(df)
+        my_grid = my_grid or stations.guess_my_grid(reports)
         feedback.pushInfo(self.tr("My grid: {}").format(my_grid or "unknown (no distance/bearing)"))
         if st.no_direction:
             feedback.pushWarning(self.tr("{} report(s) don't involve {} and were ignored").format(st.no_direction, mycall))
