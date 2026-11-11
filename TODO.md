@@ -16,6 +16,7 @@
 | 9 | Sporadic-E detector (10m/6m) | M | Medium (High for 6m, in summer) | 4, 5 help | Heuristic clustering; seasonal. |
 | 10 | Skip distance and hop structure over time | M | Medium | 3 for live data | Stats plus a chart in the timeline; shows changes, not absolute values. |
 | 11 | Band hotter/colder than usual | M | Low–Medium | 2, regular fetches | Needs weeks of collected data before it says anything; modest accuracy (r ≈ 0.3). |
+| 12 | Menu: separate sections, ionosphere on its own | S | Medium | — | A flat list of 8 entries with 8 identical toolbar icons; group by purpose so the ionosphere tools aren't mistaken for part of WSJT-X. |
 
 **Done 2026-11-11**: 1, 2, 3, 4, 5 (current data), 8. **Suggested next**: 6 (antenna A/B), then 9 (sporadic-E: *above F2 MUF* paths on 10m/6m are the raw material), then 7, 10, 11 and history for 5.
 
@@ -38,3 +39,11 @@
 9. **Sporadic-E detector (10m/6m)**: clusters of 500–2,300 km paths that F2 can't explain, mapped at path midpoints, with foEs estimated assuming a ~105 km layer. Medium-high reliability in season.
 10. **Skip distance and hop structure over time**: per band and hour in the timeline: skip-zone edge, first-hop edge, and distance histogram. Reliable for showing changes. Show any derived foF2 next to the nearest ionosonde value, not as a measurement.
 11. **"Band hotter/colder than usual"**: compare each band's spot activity with its rolling usual level for that region and hour. KC2G found modest correlation with ionosonde MUF changes (r ≈ 0.3, best with FT8). Needs 2–4 weeks of baseline data.
+12. **Menu organisation**: replace the flat *Maidenhead Mapper* menu with submenus:
+    - **Grid**: Create Maidenhead grid.
+    - **PSK Reporter**: Fetch, Import.
+    - **WSJT-X**: Import ALL.TXT; WSJT-X live map (panel).
+    - **Ionosphere**: *Fetch ionosphere (KC2G)* and *Check paths against the ionosphere (MUF)*, as their own menu items. Later ionosphere features (history for 5, sporadic-E 9) go here too.
+    - **Activity timeline** stays at the top level, since it works with everything.
+
+    Design rule: the ionosphere tools stay independent of the WSJT-X live panel. They take any station or exchange layer as input, and the live panel gets no ionosphere options of its own. Also give the toolbar one drop-down button (or distinct icons) instead of 8 identical ones. The Processing Toolbox groups already match: Stations / Ionosphere.
