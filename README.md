@@ -3,12 +3,14 @@
 QGIS plugin for amateur-radio Maidenhead maps.
 
 - **Create Maidenhead grid**: field (2-char, 20°×10°) and square (4-char, 2°×1°) polygon layers with a `locator` attribute. They come pre-styled and labelled; squares appear when zoomed in past 1:20,000,000.
-- **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from [pskreporter-analytics](https://github.com/cwtews/pskreporter-analytics)) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
+- **Fetch from PSK Reporter**: downloads the last 1–24 hours of reports for a callsign into a folder, then maps the whole folder. It keeps to PSK Reporter's limit of one query per 5 minutes.
+- **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*, or from [pskreporter-analytics](https://github.com/cwtews/pskreporter-analytics)) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
+- **Activity timeline**: a chart of reports per hour for a PSK Reporter layer. Drag across it to map only those hours.
 - **WSJT-X live map**: listens to WSJT-X's UDP feed and plots every station it decodes. Markers update every 2 s and fade over a set time since each station was last heard. Stations you log a QSO with become red stars. Works alongside JTAlert/GridTracker via multicast.
 
 The grid always spans exactly -180..180 / -90..90. The earlier hand-built grid took its extent from the OSM basemap (Web Mercator stops at ±85.05°), which shifted every field about 5° south.
 
-Requires QGIS 3.34 or later (tested on 3.44).
+Requires QGIS 3.34 or later (tested on 3.44). No extra Python packages. Licensed GPLv3 or later (see `LICENSE`).
 
 ## Install for development (Windows)
 
@@ -28,6 +30,15 @@ Restart QGIS, then enable **Maidenhead Mapper** under *Plugins → Manage and In
 - **Extent**: leave empty for the whole world (324 fields / 32,400 squares), or pick the map canvas or a layer. Any CRS works; the grid itself is always aligned to whole degrees.
 - **Outputs**: temporary layers or files (e.g. GeoPackage). Uncheck an output to skip it.
 
+### Fetch from PSK Reporter
+
+*Plugins → Maidenhead Mapper → Fetch from PSK Reporter…*
+
+- **Callsign**, **Hours back** (1–24; PSK Reporter keeps about a day), optional **Mode** (e.g. `FT8`).
+- **Save into folder**: each fetch adds `psk_YYYY_MM_DD-HH_MM_SS.json` (UTC), the same format `pskreporter-pull.py` writes. Fetch every so often into the same folder to build up a history; overlaps are counted once.
+- The output layer maps everything in the folder with default settings. For filters, run *Import* on the folder.
+- Asking again within 5 minutes is refused with the time left, as PSK Reporter requests.
+
 ### Import PSK Reporter reports
 
 *Plugins → Maidenhead Mapper → Import PSK Reporter reports…*
@@ -37,6 +48,15 @@ Restart QGIS, then enable **Maidenhead Mapper** under *Plugins → Manage and In
 - **My grid**: for distance/bearing. Leave empty to use the locator most often reported for you.
 - **Locator precision**: positions use the station's most recent locator, capped here (default 6 characters).
 - **Style**: SNR (best report), band (lowest band heard), direction, or a single symbol. Restyle any time in *Layer Properties*.
+
+### Activity timeline
+
+*Plugins → Maidenhead Mapper → Activity timeline* opens a panel under the map. Choose a station layer made by *Fetch* or *Import*.
+
+- Bars show reports per UTC hour: blue = stations I heard, orange = stations that heard me. Hover over a bar for its counts.
+- **Drag** across the bars to pick hours. On release, the layer's markers are rebuilt from only those reports, so counts, SNR, bands and first/last times describe that window. **Double-click** or **All hours** picks everything; **◀ ▶** step the window by its own length.
+- The layer remembers its folder, filters and chosen hours, so this works again after reopening the project. If more pulls have been added to the folder, they are read in.
+- The timeline replaces the layer's features. It refuses while the layer is being edited.
 
 ### WSJT-X live map
 
@@ -61,7 +81,7 @@ With only WSJT-X and QGIS, *Unicast* on `127.0.0.1:2237` (the WSJT-X default) al
 **Testing without a radio**: replay a recorded `ALL.TXT` as live packets:
 
 ```
-python tools/replay_alltxt.py path\to\ALL.TXT --speed 30
+python tools/replay_alltxt.py path\to\ALL.TXT --speed 30 --de-call MYCALL --de-grid CN85
 ```
 
 `--speed 0` sends as fast as possible. `--qso K7ABC:DN17` logs a QSO at the end. `--address 127.0.0.1` sends unicast.
@@ -71,12 +91,14 @@ python tools/replay_alltxt.py path\to\ALL.TXT --speed 30
 ```
 maidenhead_mapper/
   core/          pure Python, no QGIS imports: locator math, bands, PSK Reporter
-                 loading/summaries, WSJT-X UDP protocol, FT8 message parsing, live model
+                 loading/summaries/queries, hourly counts, WSJT-X UDP protocol,
+                 FT8 message parsing, live model
   algorithms/    Processing algorithms and shared styling
+  timeline/      activity timeline panel and its bar chart
   live/          UDP listener, live layer and dock panel
   provider.py    Processing provider (id "maidenhead")
   plugin.py      menu/toolbar wiring
-tools/           replay_alltxt.py (fake WSJT-X from a recorded log)
+tools/           replay_alltxt.py (fake WSJT-X from a recorded log), package.py (release zip)
 tests/           pytest for core/
 ```
 
@@ -87,3 +109,12 @@ python -m pytest
 ```
 
 Runs with any Python 3.8+ that has pytest installed; QGIS is not needed. The plugin itself uses only the Python standard library and QGIS.
+
+## Release
+
+```
+python -m pytest
+python tools/package.py      # -> dist/maidenhead_mapper-<version>.zip
+```
+
+Bump `version` and `changelog` in `maidenhead_mapper/metadata.txt` first. Test the zip with *Plugins → Manage and Install Plugins → Install from ZIP*, then upload it at plugins.qgis.org.

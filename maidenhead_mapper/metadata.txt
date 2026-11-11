@@ -1,13 +1,29 @@
 [general]
 name=Maidenhead Mapper
 qgisMinimumVersion=3.34
-description=Maidenhead grid locator layers and WSJT-X log mapping for amateur radio.
-about=Builds correctly aligned Maidenhead field (2-char) and square (4-char) grid layers. Planned: import a WSJT-X ADIF log and place a styled marker for each station worked.
-version=0.1.0
+description=Amateur radio maps: Maidenhead grid layers, PSK Reporter station maps with an activity timeline, and a live WSJT-X map.
+about=For amateur (ham) radio operators.
+    Create Maidenhead grid: correctly aligned field (2-character) and square (4-character) polygon layers, styled and labelled.
+    Fetch from PSK Reporter / Import PSK Reporter reports: one marker per station you heard or that heard you, with report count, SNR, bands, modes, times and distance/bearing. Style by SNR, band or direction.
+    Activity timeline: a reports-per-hour chart; drag across it to map only those hours.
+    WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
+    No extra Python packages needed.
+version=0.2.0
 author=Cody Tews
 email=cwtews@gmail.com
-tags=ham radio,amateur radio,maidenhead,grid locator,wsjt-x,adif
+homepage=https://github.com/cwtews/maidenhead-mapper
+repository=https://github.com/cwtews/maidenhead-mapper
+tracker=https://github.com/cwtews/maidenhead-mapper/issues
+license=GPL-3.0-or-later
+tags=ham radio,amateur radio,maidenhead,grid locator,wsjt-x,ft8,psk reporter,udp,live
 category=Vector
 icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
+changelog=
+    0.2.0
+    - Fetch from PSK Reporter (respects its 5-minute query limit)
+    - Activity timeline: reports per hour; pick hours to map
+    - No pandas needed; PSK import is faster
+    0.1.0
+    - Maidenhead grid, PSK Reporter import, WSJT-X live map

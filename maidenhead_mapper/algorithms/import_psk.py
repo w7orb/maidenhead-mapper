@@ -1,5 +1,6 @@
 """Processing algorithm: Import PSK Reporter reports as station markers."""
 
+import json
 import os
 import warnings
 
@@ -63,6 +64,64 @@ def station_feature(fields, s):
         s.distance_km, s.bearing_deg, s.source,
     ])
     return feat
+
+
+LAYER_PROPERTY = "maidenhead_mapper/psk"  # JSON of the options a station layer was made with
+
+
+def read_folder(alg, folder, mycall, feedback, progress_to=80.0):
+    """Load and label every report in a folder, logging what was skipped."""
+    feedback.setProgressText(alg.tr("Reading files…"))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # skipped files are reported below
+        reports = psk.load_reports(folder, progress=lambda i, n: feedback.setProgress(progress_to * i / max(n, 1)))
+    feedback.pushInfo(alg.tr("{} file(s) read, {} unique report(s)").format(reports.files_read, len(reports)))
+    for name in reports.skipped_files:
+        feedback.reportError(alg.tr("Skipped unreadable file: {}").format(name))
+    if not reports:
+        raise QgsProcessingException(alg.tr("No reception reports found in {}").format(folder))
+    return psk.add_remote_station(reports, mycall)
+
+
+def write_stations(alg, parameters, sink_name, context, feedback, reports, opts, style):
+    """Summarize labelled reports per station into the sink; return its dest id.
+
+    opts: folder, mycall, my_grid, directions, bands, precision, start, end
+    (epoch seconds or None). They are stored on the loaded layer so the
+    activity timeline can re-summarize it for other time ranges.
+    """
+    mycall = opts["mycall"]
+    summary, st = stations.summarize(
+        reports, precision=opts["precision"], my_grid=opts["my_grid"], directions=opts["directions"],
+        bands=opts["bands"], start=psk.report_time(opts["start"]), end=psk.report_time(opts["end"]))
+    my_grid = opts["my_grid"] or stations.guess_my_grid(reports)
+    opts = dict(opts, my_grid=my_grid)
+    feedback.pushInfo(alg.tr("My grid: {}").format(my_grid or "unknown (no distance/bearing)"))
+    if st.no_direction:
+        feedback.pushWarning(alg.tr("{} report(s) don't involve {} and were ignored").format(st.no_direction, mycall))
+    if st.self_spots:
+        feedback.pushInfo(alg.tr("{} self-spot(s) (my own signal) ignored").format(st.self_spots))
+    if st.no_locator:
+        feedback.pushInfo(alg.tr("{} report(s) had no valid locator for the other station").format(st.no_locator))
+    if st.filtered_out:
+        feedback.pushInfo(alg.tr("{} report(s) outside the direction/band/time filters").format(st.filtered_out))
+
+    fields = station_fields()
+    sink, dest_id = alg.parameterAsSink(parameters, sink_name, context, fields, QgsWkbTypes.Point, WGS84)
+    if sink is None:
+        raise QgsProcessingException(alg.invalidSinkError(parameters, sink_name))
+    for i, s in enumerate(summary):
+        if feedback.isCanceled():
+            break
+        sink.addFeature(station_feature(fields, s), QgsFeatureSink.FastInsert)
+        if i % 200 == 0:
+            feedback.setProgress(80 + 20.0 * i / max(len(summary), 1))
+    heard = sum(1 for s in summary if s.direction == "heard")
+    feedback.pushInfo(alg.tr("{} station(s): {} heard, {} heard me").format(len(summary), heard, len(summary) - heard))
+
+    styling.attach(context, dest_id, alg.tr("PSK Reporter stations"), style,
+                   properties={LAYER_PROPERTY: json.dumps(opts)})
+    return dest_id
 
 
 class ImportPskAlgorithm(QgsProcessingAlgorithm):
@@ -133,13 +192,11 @@ class ImportPskAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT, self.tr("PSK Reporter stations"), QgsProcessing.TypeVectorPoint))
 
-    def _timestamp(self, parameters, name, context):
+    def _epoch(self, parameters, name, context):
         if not parameters.get(name):
             return None
         qdt = self.parameterAsDateTime(parameters, name, context)
-        if not qdt.isValid():
-            return None
-        return psk.report_time(qdt.toSecsSinceEpoch())
+        return qdt.toSecsSinceEpoch() if qdt.isValid() else None
 
     def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
         folder = self.parameterAsFile(parameters, self.INPUT, context)
@@ -162,44 +219,12 @@ class ImportPskAlgorithm(QgsProcessingAlgorithm):
         precision = mh.PRECISIONS[self.parameterAsEnum(parameters, self.PRECISION, context)]
         style = self.parameterAsEnum(parameters, self.STYLE, context)
 
-        feedback.setProgressText(self.tr("Reading files…"))
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")  # skipped files are reported below
-            reports = psk.load_reports(folder, progress=lambda i, n: feedback.setProgress(80.0 * i / max(n, 1)))
-        feedback.pushInfo(self.tr("{} file(s) read, {} unique report(s)").format(reports.files_read, len(reports)))
-        for name in reports.skipped_files:
-            feedback.reportError(self.tr("Skipped unreadable file: {}").format(name))
-        if not reports:
-            raise QgsProcessingException(self.tr("No reception reports found in {}").format(folder))
-
-        psk.add_remote_station(reports, mycall)
-        summary, st = stations.summarize(
-            reports, precision=precision, my_grid=my_grid, directions=directions, bands=bands,
-            start=self._timestamp(parameters, self.START, context),
-            end=self._timestamp(parameters, self.END, context))
-        my_grid = my_grid or stations.guess_my_grid(reports)
-        feedback.pushInfo(self.tr("My grid: {}").format(my_grid or "unknown (no distance/bearing)"))
-        if st.no_direction:
-            feedback.pushWarning(self.tr("{} report(s) don't involve {} and were ignored").format(st.no_direction, mycall))
-        if st.self_spots:
-            feedback.pushInfo(self.tr("{} self-spot(s) (my own signal) ignored").format(st.self_spots))
-        if st.no_locator:
-            feedback.pushInfo(self.tr("{} report(s) had no valid locator for the other station").format(st.no_locator))
-        if st.filtered_out:
-            feedback.pushInfo(self.tr("{} report(s) outside the direction/band/time filters").format(st.filtered_out))
-
-        fields = station_fields()
-        sink, dest_id = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.Point, WGS84)
-        if sink is None:
-            raise QgsProcessingException(self.invalidSinkError(parameters, self.OUTPUT))
-        for i, s in enumerate(summary):
-            if feedback.isCanceled():
-                break
-            sink.addFeature(station_feature(fields, s), QgsFeatureSink.FastInsert)
-            if i % 200 == 0:
-                feedback.setProgress(80 + 20.0 * i / max(len(summary), 1))
-        heard = sum(1 for s in summary if s.direction == "heard")
-        feedback.pushInfo(self.tr("{} station(s): {} heard, {} heard me").format(len(summary), heard, len(summary) - heard))
-
-        styling.attach(context, dest_id, self.tr("PSK Reporter stations"), style)
+        opts = {
+            "folder": folder, "mycall": mycall, "my_grid": my_grid, "directions": list(directions),
+            "bands": bands, "precision": precision,
+            "start": self._epoch(parameters, self.START, context),
+            "end": self._epoch(parameters, self.END, context),
+        }
+        reports = read_folder(self, folder, mycall, feedback)
+        dest_id = write_stations(self, parameters, self.OUTPUT, context, feedback, reports, opts, style)
         return {self.OUTPUT: dest_id}

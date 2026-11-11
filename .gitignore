@@ -20,3 +20,4 @@ Thumbs.db
 
 # Machine-specific MCP config (points at a local qgis-mcp clone)
 .mcp.json
+dist/

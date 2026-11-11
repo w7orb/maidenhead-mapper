@@ -1,4 +1,4 @@
-"""QGIS plugin: registers the Processing provider, menu/toolbar and live dock."""
+"""QGIS plugin: registers the Processing provider, menu/toolbar and docks."""
 
 from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import Qt
@@ -12,8 +12,61 @@ MENU = "&Maidenhead Mapper"
 # (algorithm id, menu text)
 ACTIONS = [
     ("maidenhead:create_grid", "Create Maidenhead grid…"),
+    ("maidenhead:fetch_psk", "Fetch from PSK Reporter…"),
     ("maidenhead:import_psk", "Import PSK Reporter reports…"),
 ]
+
+
+def _live_dock(parent):
+    from .live.dock import LiveDock
+    return LiveDock(parent)
+
+
+def _timeline_dock(parent):
+    from .timeline.dock import TimelineDock
+    return TimelineDock(parent)
+
+
+# (menu text, dock factory, dock area)
+DOCKS = [
+    ("Activity timeline", _timeline_dock, Qt.DockWidgetArea.BottomDockWidgetArea),
+    ("WSJT-X live map", _live_dock, Qt.DockWidgetArea.RightDockWidgetArea),
+]
+
+
+class _DockToggle:
+    """A checkable action that shows/hides a dock created on first use."""
+
+    def __init__(self, iface, text, factory, area):
+        self.iface, self.factory, self.area = iface, factory, area
+        self.dock = None
+        self.action = QAction(QIcon(ICON), text, iface.mainWindow())
+        self.action.setCheckable(True)
+        self.action.toggled.connect(self._toggle)
+
+    def _toggle(self, on):
+        if on:
+            if self.dock is None:
+                self.dock = self.factory(self.iface.mainWindow())
+                self.iface.addDockWidget(self.area, self.dock)
+                self.dock.visibilityChanged.connect(self._visibility)
+            self.dock.show()
+            self.dock.raise_()
+        elif self.dock is not None:
+            self.dock.hide()  # hiding keeps it running (e.g. the live listener)
+
+    def _visibility(self, visible):
+        if self.action.isChecked() != visible:
+            self.action.blockSignals(True)
+            self.action.setChecked(visible)
+            self.action.blockSignals(False)
+
+    def unload(self):
+        if self.dock is not None:
+            self.dock.shutdown()
+            self.iface.removeDockWidget(self.dock)
+            self.dock.deleteLater()
+            self.dock = None
 
 
 class MaidenheadMapperPlugin:
@@ -21,8 +74,7 @@ class MaidenheadMapperPlugin:
         self.iface = iface
         self.provider = None
         self.actions = []
-        self.dock = None
-        self.live_action = None
+        self.toggles = []
 
     def initProcessing(self):  # noqa: N802
         self.provider = MaidenheadProvider()
@@ -33,49 +85,25 @@ class MaidenheadMapperPlugin:
         for alg_id, text in ACTIONS:
             action = QAction(QIcon(ICON), text, self.iface.mainWindow())
             action.triggered.connect(lambda _=False, a=alg_id: self._open(a))
-            self.iface.addPluginToMenu(MENU, action)
-            self.iface.addToolBarIcon(action)
-            self.actions.append(action)
+            self._add(action)
+        for text, factory, area in DOCKS:
+            toggle = _DockToggle(self.iface, text, factory, area)
+            self.toggles.append(toggle)
+            self._add(toggle.action)
 
-        self.live_action = QAction(QIcon(ICON), "WSJT-X live map", self.iface.mainWindow())
-        self.live_action.setCheckable(True)
-        self.live_action.toggled.connect(self._toggle_dock)
-        self.iface.addPluginToMenu(MENU, self.live_action)
-        self.iface.addToolBarIcon(self.live_action)
-        self.actions.append(self.live_action)
-
-    def _ensure_dock(self):
-        if self.dock is None:
-            from .live.dock import LiveDock
-            self.dock = LiveDock(self.iface.mainWindow())
-            self.iface.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea, self.dock)
-            self.dock.visibilityChanged.connect(self._dock_visibility)
-        return self.dock
-
-    def _toggle_dock(self, on):
-        if on:
-            self._ensure_dock().show()
-            self.dock.raise_()
-        elif self.dock is not None:
-            self.dock.hide()  # hiding keeps the listener running
-
-    def _dock_visibility(self, visible):
-        if self.live_action is not None and self.live_action.isChecked() != visible:
-            self.live_action.blockSignals(True)
-            self.live_action.setChecked(visible)
-            self.live_action.blockSignals(False)
+    def _add(self, action):
+        self.iface.addPluginToMenu(MENU, action)
+        self.iface.addToolBarIcon(action)
+        self.actions.append(action)
 
     def unload(self):
-        if self.dock is not None:
-            self.dock.shutdown()
-            self.iface.removeDockWidget(self.dock)
-            self.dock.deleteLater()
-            self.dock = None
+        for toggle in self.toggles:
+            toggle.unload()
+        self.toggles = []
         for action in self.actions:
             self.iface.removePluginMenu(MENU, action)
             self.iface.removeToolBarIcon(action)
         self.actions = []
-        self.live_action = None
         if self.provider:
             QgsApplication.processingRegistry().removeProvider(self.provider)
             self.provider = None

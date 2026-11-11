@@ -47,8 +47,8 @@ def main():
     ap.add_argument("--speed", type=float, default=30.0, help="time compression; 0 = as fast as possible")
     ap.add_argument("--limit", type=int, default=0, help="stop after N decodes")
     ap.add_argument("--id", default="WSJT-X-replay")
-    ap.add_argument("--de-call", default="W7ORB")
-    ap.add_argument("--de-grid", default="CN85on")
+    ap.add_argument("--de-call", default="N0CALL", help="callsign the fake WSJT-X reports as its own")
+    ap.add_argument("--de-grid", default="AA00", help="grid the fake WSJT-X reports as its own")
     ap.add_argument("--qso", action="append", default=[], help="CALL:GRID to log as a QSO at the end")
     args = ap.parse_args()
 

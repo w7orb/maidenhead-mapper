@@ -90,9 +90,10 @@ _keep_alive = []
 
 
 class StationStyler(QgsProcessingLayerPostProcessorInterface):
-    def __init__(self, style):
+    def __init__(self, style, properties=None):
         super().__init__()
         self.style = style
+        self.properties = properties or {}
 
     def postProcessLayer(self, layer, context, feedback):  # noqa: N802
         r = renderer_for(self.style)
@@ -100,15 +101,20 @@ class StationStyler(QgsProcessingLayerPostProcessorInterface):
             layer.setRenderer(r)
         layer.setLabeling(callsign_labels())
         layer.setLabelsEnabled(True)
+        for key, value in self.properties.items():
+            layer.setCustomProperty(key, value)
         layer.triggerRepaint()
 
 
-def attach(context, dest_id, name, style):
-    """Name and style an output layer once Processing loads it."""
+def attach(context, dest_id, name, style, properties=None):
+    """Name and style an output layer once Processing loads it.
+
+    properties: custom layer properties to set (saved with the project).
+    """
     if not context.willLoadLayerOnCompletion(dest_id):
         return
     details = context.layerToLoadOnCompletionDetails(dest_id)
     details.name = name
-    styler = StationStyler(style)
+    styler = StationStyler(style, properties)
     _keep_alive.append(styler)
     details.setPostProcessor(styler)
