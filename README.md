@@ -17,7 +17,7 @@ Requires QGIS 3.34 or later (tested on 3.44). No extra Python packages. Licensed
 Link the plugin folder into your QGIS profile (run in `cmd`):
 
 ```
-mklink /J "%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\maidenhead_mapper" "d:\projects\gis\maidenhead_plugin\maidenhead_mapper"
+mklink /J "%APPDATA%\QGIS\QGIS3\profiles\default\python\plugins\maidenhead_mapper" "d:\projects\gis\maidenhead-mapper\maidenhead_mapper"
 ```
 
 Restart QGIS, then enable **Maidenhead Mapper** under *Plugins → Manage and Install Plugins → Installed*. Install the **Plugin Reloader** plugin to pick up code changes without restarting.
