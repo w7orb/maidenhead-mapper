@@ -31,7 +31,7 @@ from ..core import es, hops, iono
 from ..core import maidenhead as mh
 from . import styling
 from .import_psk import WGS84
-from .paths import PathError, PathReader, my_grid_for
+from .paths import SKIP_GEOMETRY_CHECK, PathError, PathReader, my_grid_for
 from .qt_compat import DATETIME, DOUBLE, INT, STRING, field, utc_qdatetime
 
 ES_COLOURS = {es.HIGH: "#d62728", es.POSSIBLE: "#ff7f0e"}
@@ -172,7 +172,7 @@ class SporadicEAlgorithm(QgsProcessingAlgorithm):
                 feedback.pushWarning(self.tr("No ionosphere data ({}); using band rules only").format(exc))
 
         cands = []   # dict per candidate
-        for f in source.getFeatures():
+        for f in source.getFeatures(QgsFeatureRequest(), SKIP_GEOMETRY_CHECK):
             if feedback.isCanceled():
                 break
             p = reader.read(f)

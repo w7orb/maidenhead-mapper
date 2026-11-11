@@ -7,7 +7,12 @@ layers (grid) are paths from My grid to the station.
 import datetime as _dt
 import json
 
-from qgis.core import QgsSettings
+from qgis.core import QgsProcessingFeatureSource, QgsSettings
+
+# Paths are read from grid fields, not geometry. Pass this to source.getFeatures():
+# context.setInvalidGeometryCheck() alone doesn't stop the check (seen in QGIS 3.44
+# on a live session layer with zero-length same-square lines).
+SKIP_GEOMETRY_CHECK = QgsProcessingFeatureSource.FlagSkipGeometryValidityChecks
 
 from ..core import maidenhead as mh
 from ..core.bands import band_mhz

@@ -40,7 +40,7 @@ from ..core import maidenhead as mh
 from ..core.bands import BAND_NAMES
 from . import styling
 from .import_psk import WGS84
-from .paths import PathError, PathReader, my_grid_for
+from .paths import SKIP_GEOMETRY_CHECK, PathError, PathReader, my_grid_for
 from .qt_compat import DATETIME, DOUBLE, INT, STRING, field, utc_qdatetime
 
 BASE_URL = "https://prop.kc2g.com"
@@ -488,7 +488,7 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
         counts = {iono.STATUS_F2: 0, iono.STATUS_ABOVE: 0, iono.STATUS_NO_DATA: 0}
         labels = {}
         total = source.featureCount() or 1
-        for i, f in enumerate(source.getFeatures()):
+        for i, f in enumerate(source.getFeatures(QgsFeatureRequest(), SKIP_GEOMETRY_CHECK)):
             if feedback.isCanceled():
                 break
             feedback.setProgress(100.0 * i / total)
