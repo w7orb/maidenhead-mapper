@@ -17,3 +17,6 @@ __pycache__/
 .idea/
 Thumbs.db
 .DS_Store
+
+# Machine-specific MCP config (points at a local qgis-mcp clone)
+.mcp.json
