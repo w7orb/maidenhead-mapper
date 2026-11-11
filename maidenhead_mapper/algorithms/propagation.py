@@ -111,7 +111,9 @@ class SporadicEAlgorithm(QgsProcessingAlgorithm):
             "the F2 MUF\n"
             "• possible: 12m/10m without ionosphere data\n\n"
             "F2 status comes from the layer itself if it has been through 'Check paths against "
-            "the ionosphere', else (optionally) from KC2G's current data for recent paths.\n\n"
+            "the ionosphere', else (optionally) from KC2G for recent paths or the CCIR monthly-median "
+            "model for older ones. With the model, 'above F2 MUF' means above the typical MUF for "
+            "that month, so treat 10m results as likely rather than certain.\n\n"
             "Each candidate is a point at the path midpoint (where it met the Es layer) with "
             "foes_min_mhz: the lowest Es critical frequency that returns that band at that range. "
             "Nearby candidates close in time are grouped into Es clouds.")
@@ -126,9 +128,10 @@ class SporadicEAlgorithm(QgsProcessingAlgorithm):
             self.BANDS, self.tr("Bands"), options=list(es.ES_BANDS), allowMultiple=True,
             defaultValue=list(range(len(es.ES_BANDS)))))
         self.addParameter(QgsProcessingParameterBoolean(
-            self.USE_IONO, self.tr("Use KC2G ionosphere data for recent 12m/10m paths"), defaultValue=True))
+            self.USE_IONO, self.tr("Check 12m/10m paths against the ionosphere (KC2G if recent, else CCIR model)"),
+            defaultValue=True))
         self.addParameter(QgsProcessingParameterNumber(
-            self.MAX_AGE, self.tr("…only paths within this many hours of it"),
+            self.MAX_AGE, self.tr("Use KC2G for paths within this many hours of its data"),
             QgsProcessingParameterNumber.Double, defaultValue=3.0, minValue=0.1, maxValue=48.0))
         self.addParameter(QgsProcessingParameterNumber(
             self.RADIUS, self.tr("Cloud: midpoints within (km)"), QgsProcessingParameterNumber.Double,
@@ -160,19 +163,13 @@ class SporadicEAlgorithm(QgsProcessingAlgorithm):
         bands = [es.ES_BANDS[i] for i in picked] if parameters.get(self.BANDS) not in (None, "", []) else list(es.ES_BANDS)
         has_check = "f2_status" in names and "bands_f2" in names
 
-        cond = None
+        src = None
         if not has_check and self.parameterAsBool(parameters, self.USE_IONO, context):
-            from .ionosphere import cached_time, fetch, load_conditions
+            from .ionosphere import MODE_AUTO, IonoSource
             try:
-                fetch(feedback)
-                cond = load_conditions()
+                src = IonoSource(feedback, MODE_AUTO, self.parameterAsDouble(parameters, self.MAX_AGE, context))
             except QgsProcessingException as exc:
                 feedback.pushWarning(self.tr("No ionosphere data ({}); using band rules only").format(exc))
-            except (OSError, ValueError):
-                cond = None
-            if cached_time() is None:
-                cond = None
-        max_age = self.parameterAsDouble(parameters, self.MAX_AGE, context) * 3600
 
         cands = []   # dict per candidate
         for f in source.getFeatures():
@@ -190,10 +187,11 @@ class SporadicEAlgorithm(QgsProcessingAlgorithm):
                 status = None
                 if has_check and f["f2_status"] not in (None, iono.STATUS_NO_DATA):
                     status = iono.STATUS_F2 if band in str(f["bands_f2"] or "").split(",") else iono.STATUS_ABOVE
-                elif cond is not None and band not in es.VHF_BANDS and (
-                        p["when"] is None or abs((p["when"] - cond.time).total_seconds()) <= max_age):
-                    (x1, y1), (x2, y2) = mh.center(p["ga"]), mh.center(p["gb"])
-                    status = iono.analyse_path(x1, y1, x2, y2, freq, cond).status
+                elif src is not None and band not in es.VHF_BANDS:
+                    cond, _, _ = src.conditions(p["when"])
+                    if cond is not None:
+                        (x1, y1), (x2, y2) = mh.center(p["ga"]), mh.center(p["gb"])
+                        status = iono.analyse_path(x1, y1, x2, y2, freq, cond).status
                 conf = es.classify(dist, band, status, bands)
                 if conf is None:
                     continue
@@ -294,7 +292,8 @@ class SkipDistanceAlgorithm(QgsProcessingAlgorithm):
             "• median_km, p90_km, and n_local (under 300 km: ground wave or local)\n"
             "• fof2_est_mhz: foF2 implied by the skip edge (secant law, F2 at 300 km), only when "
             "the edge is within one hop. An indicator for comparing hours, not a measurement.\n"
-            "• kc2g_fof2_mhz: KC2G's foF2 at your location, when its cached data is within 3 hours.\n\n"
+            "• kc2g_fof2_mhz: KC2G's foF2 at your location, when its cached data is within 3 hours.\n"
+            "• ccir_fof2_mhz: the CCIR monthly-median foF2 at your location for that hour and sunspot number.\n\n"
             "Distances are from your grid. Plot the table with the DataPlotly plugin, or join it to "
             "a layer.")
 
@@ -351,11 +350,17 @@ class SkipDistanceAlgorithm(QgsProcessingAlgorithm):
         except (OSError, ValueError):
             cond = None
         here = mh.center(my_grid) if mh.is_valid(my_grid) else None
+        model = None
+        try:
+            from .ionosphere import MODE_MODEL, IonoSource
+            model = IonoSource(feedback, MODE_MODEL)
+        except (QgsProcessingException, OSError, ValueError) as exc:
+            feedback.pushWarning(self.tr("No CCIR model ({}); ccir_fof2_mhz left empty").format(exc))
 
         fields = QgsFields()
         for name, kind in (("band", STRING), ("hour_utc", DATETIME), ("n_sky", INT), ("n_local", INT),
                            ("skip_km", DOUBLE), ("median_km", DOUBLE), ("p90_km", DOUBLE),
-                           ("fof2_est_mhz", DOUBLE), ("kc2g_fof2_mhz", DOUBLE)):
+                           ("fof2_est_mhz", DOUBLE), ("kc2g_fof2_mhz", DOUBLE), ("ccir_fof2_mhz", DOUBLE)):
             fields.append(field(name, kind, 0))
         sink, dest = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.NoGeometry)
         if sink is None:
@@ -366,9 +371,15 @@ class SkipDistanceAlgorithm(QgsProcessingAlgorithm):
             kc2g = None
             if cond is not None and here and abs((hour - cond.time).total_seconds()) <= 3 * 3600:
                 kc2g = round(cond.at(*here)[0], 2)
+            median = None
+            if model is not None and here:
+                import datetime as _dt
+                mc, _, _ = model.conditions(hour + _dt.timedelta(minutes=30))
+                if mc is not None:
+                    median = round(mc.at(*here)[0], 2)
             f = QgsFeature(fields)
             f.setAttributes([band, utc_qdatetime(hour), s.n, s.local_n, s.skip_km, s.median_km, s.p90_km,
-                             s.fof2_est_mhz, kc2g])
+                             s.fof2_est_mhz, kc2g, median])
             sink.addFeature(f, QgsFeatureSink.FastInsert)
             with_skip += s.skip_km is not None
         feedback.pushInfo(self.tr("{} band-hour row(s), {} with enough contacts for a skip edge").format(

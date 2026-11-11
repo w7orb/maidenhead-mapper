@@ -74,28 +74,31 @@ The ionosphere tools take any station or exchange layer; they aren't tied to the
 
 ### Ionosphere: fetch and check paths
 
-Data comes from [KC2G](https://prop.kc2g.com): current GIRO/INGV ionosonde measurements, and worldwide contour maps of MUF(3000), foF2 and hmF2 built from them over the IRI-2020 model. It is cached and re-downloaded at most every 15 minutes. There is **no history**, so this is for current activity (the live map, today's fetches and logs).
+Two sources, chosen per path (*Ionosphere source*; `iono_source` records which was used):
+
+- **KC2G** ([prop.kc2g.com](https://prop.kc2g.com)): current GIRO/INGV ionosonde measurements and worldwide contour maps of MUF(3000), foF2 and hmF2 built from them over the IRI-2020 model. Cached, re-downloaded at most every 15 minutes. Used for paths within 3 hours (adjustable) of its data.
+- **CCIR model** (ITU-R P.1239, the F2 maps inside IRI): the *monthly median* foF2 and M(3000) for any date, time and sunspot number, so past logs (your 2022 ALL.TXT, old PSK pulls) can be checked too. It shows typical conditions for that month, not that day's: expect foF2 within ~20%. The coefficients (~0.5 MB) are downloaded once from the MIT-licensed [iri2016](https://github.com/space-physics/iri2016) repository. The modified dip latitude comes from an IGRF grid shipped with the plugin. The sunspot number (R12) is SILSO's monthly smoothed value (WDC-SILSO, Royal Observatory of Belgium, CC BY-NC 4.0), or KC2G's effective sunspot number for recent days, or one you enter. Checked against PyIRI: foF2 within 0.8%.
 
 - **Fetch ionosphere (KC2G)**: ionosondes that reported recently (foF2, hmF2, MUF(3000), confidence) and one contour map (MUF(3000), foF2 or hmF2).
 - **Check paths against the ionosphere**: input any station layer (paths from *My grid*) or exchange layer (grid_a to grid_b). For each path it works out:
   - the likely hop count using the layer height at the reflection points (`hops_iono`, `takeoff_iono`);
-  - each hop's MUF from the secant law, scaled to KC2G's MUF(3000) there; the path MUF is the lowest (`muf_mhz`, with `fof2_mhz`, `hmf2_km`);
+  - each hop's MUF from the secant law, scaled to MUF(3000) there; the path MUF is the lowest. Paths over 4,000 km follow ITU-R P.533 instead: the lower of 1.1 × MUF(3000) at two control points 2,000 km from each end (`muf_mhz`, with `fof2_mhz`, `hmf2_km`);
   - `f2_status`: **F2** (the band is at or below the MUF), **above F2 MUF** (not explained by simple F2 hops: sporadic-E, scatter, long path, or the map is off), or **no data**;
   - `bands_f2`: which of the path's bands F2 supports.
-  Paths more than 3 hours (adjustable) from the data get *no data*. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, one per hop, with the layer and MUF there.
+  With *Auto*, recent paths use KC2G and older ones the CCIR model. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, one per hop, with the layer and MUF there.
 - Near a current, trusted ionosonde (confidence 50 or higher), the maps are corrected towards its measurements; the correction fades out over about 1,000 km. Contour maps can't show peaks above their top level (MUF(3000) stops at 28 MHz), and this fills that in where there's an ionosonde.
 
 ### Find sporadic-E paths
 
 Paths of 500–2,300 km (one hop off a ~105 km sporadic-E layer) on 12m, 10m, 6m and up that F2 can't explain:
-- **high** confidence: 6m and up, or *Check paths* found the band above the F2 MUF;
+- **high** confidence: 6m and up, or the band is above the F2 MUF (from *Check paths*, KC2G for recent paths, or the CCIR model for older ones);
 - **possible**: 12m/10m without ionosphere data.
 
 Each candidate is a point at the path midpoint with `foes_min_mhz`, the lowest Es critical frequency that returns that band at that range. Candidates within 500 km and 60 minutes of each other form **Es clouds** (count, bands, highest foEs).
 
 ### Skip distance by hour
 
-For a PSK Reporter layer, an ALL.TXT import or a saved session: a table per band and UTC hour with the skip edge (`skip_km`, the 10th percentile of sky-wave distances, from 20+ contacts), median and 90th-percentile distance, local contacts, and the foF2 the skip edge implies. Within 3 hours of cached KC2G data it adds KC2G's foF2 at your location for comparison. The Activity timeline also shows the skip edge per band for the chosen hours.
+For a PSK Reporter layer, an ALL.TXT import or a saved session: a table per band and UTC hour with the skip edge (`skip_km`, the 10th percentile of sky-wave distances, from 20+ contacts), median and 90th-percentile distance, local contacts, and the foF2 the skip edge implies. For comparison it adds the CCIR monthly-median foF2 at your location (`ccir_fof2_mhz`), and KC2G's within 3 hours of its data. The Activity timeline also shows the skip edge per band for the chosen hours.
 
 ### Station balance from two-way reports (WSJT-X)
 

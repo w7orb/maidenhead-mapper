@@ -16,8 +16,12 @@ secant law, scaled so a 3,000 km hop gives KC2G's MUF(3000):
     MUF(d) = MUF(3000) * sec(i(d, h)) / sec(i(3000, h))
     sin(i) = R cos(beta) / (R + h)     (i: incidence angle at the layer)
 
-The path MUF is the lowest of its hops. A frequency above it isn't
-supported by F2: the path used sporadic-E, scatter, or the map is wrong.
+The path MUF is the lowest of its hops. Paths over 4,000 km follow ITU-R
+P.533 instead: the F2 MUF is the lower of the MUF(4000) = 1.1 x MUF(3000)
+values at two control points 2,000 km from each end. Long paths often
+cross the middle by chordal hops or ducting, so the ends decide. A
+frequency above the path MUF isn't supported by F2: the path used
+sporadic-E, scatter, or the map is wrong.
 """
 
 import datetime as _dt
@@ -30,6 +34,9 @@ from . import hops as _hops
 
 R = _hops.R_EARTH
 CELL_DEG = 5.0
+LONG_PATH_KM = 4000.0      # ITU-R P.533: longer paths use two control points
+CONTROL_KM = 2000.0        # ... this far from each end
+MUF4000_FACTOR = 1.1       # F2(4000)MUF = 1.1 x F2(3000)MUF
 STATUS_F2, STATUS_ABOVE, STATUS_NO_DATA = "F2", "above F2 MUF", "no data"
 
 
@@ -282,12 +289,33 @@ def analyse_path(lon1, lat1, lon2, lat2, freq_mhz, cond: Conditions,
             break
         n, height = n_new, new_height
     n, takeoff = _hops.likely_hops(d, height, min_takeoff_deg)
-    pts = _hops.reflection_points(lon1, lat1, lon2, lat2, n)
     rows = []
-    for x, y in pts:
-        f2, h, mufd = cond.at(x, y)
-        rows.append((x, y, f2, h, mufd, hop_muf(d / n, mufd, h)))
+    if d > LONG_PATH_KM:
+        for frac in (CONTROL_KM / d, 1 - CONTROL_KM / d):
+            x, y = _along(lon1, lat1, lon2, lat2, frac)
+            f2, h, mufd = cond.at(x, y)
+            if f2 is None or h is None or mufd is None:
+                return PathIono(STATUS_NO_DATA, n, round(takeoff, 1))
+            rows.append((x, y, f2, h, mufd, MUF4000_FACTOR * mufd))
+        n_rows = len(rows)
+    else:
+        for x, y in _hops.reflection_points(lon1, lat1, lon2, lat2, n):
+            f2, h, mufd = cond.at(x, y)
+            rows.append((x, y, f2, h, mufd, hop_muf(d / n, mufd, h)))
+        n_rows = n
     muf = min(r[5] for r in rows)
     return PathIono(STATUS_F2 if freq_mhz <= muf else STATUS_ABOVE, n, takeoff,
-                    round(sum(r[3] for r in rows) / n, 1), round(min(r[2] for r in rows), 2),
+                    round(sum(r[3] for r in rows) / n_rows, 1), round(min(r[2] for r in rows), 2),
                     round(muf, 2), rows)
+
+
+def _along(lon1, lat1, lon2, lat2, frac):
+    """Point a fraction of the way along the great circle."""
+    p1, l1, p2, l2 = map(math.radians, (lat1, lon1, lat2, lon2))
+    dd = 2 * math.asin(math.sqrt(math.sin((p2 - p1) / 2) ** 2
+                                 + math.cos(p1) * math.cos(p2) * math.sin((l2 - l1) / 2) ** 2))
+    a, b = math.sin((1 - frac) * dd) / math.sin(dd), math.sin(frac * dd) / math.sin(dd)
+    x = a * math.cos(p1) * math.cos(l1) + b * math.cos(p2) * math.cos(l2)
+    y = a * math.cos(p1) * math.sin(l1) + b * math.cos(p2) * math.sin(l2)
+    z = a * math.sin(p1) + b * math.sin(p2)
+    return math.degrees(math.atan2(y, x)), math.degrees(math.atan2(z, math.hypot(x, y)))

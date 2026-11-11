@@ -48,7 +48,19 @@ FILES = {
     "mufd.geojson": "/renders/current/mufd-normal-now.geojson",
     "fof2.geojson": "/renders/current/fof2-normal-now.geojson",
     "hmf2.geojson": "/renders/current/hmf2-normal-now.geojson",
+    "essn.json": "/api/essn.json",
 }
+# CCIR (ITU-R P.1239) coefficient files as distributed with IRI, from the
+# MIT-licensed space-physics/iri2016 repository, pinned to one commit.
+CCIR_URL = ("https://raw.githubusercontent.com/space-physics/iri2016/"
+            "d77c22fe387c623eb82b5254fc235979b26b9b99/src/iri2016/data/ccir/ccir{:02d}.asc")
+# Sunspot numbers: WDC-SILSO, Royal Observatory of Belgium (CC BY-NC 4.0)
+SILSO = {"smoothed.csv": "https://www.sidc.be/SILSO/DATA/SN_ms_tot_V2.0.csv",
+         "monthly.csv": "https://www.sidc.be/SILSO/DATA/SN_m_tot_V2.0.csv"}
+SILSO_REFRESH_S = 7 * 24 * 3600
+MODE_AUTO, MODE_KC2G, MODE_MODEL = 0, 1, 2
+MODES = ["Auto: KC2G when the path is recent, else the CCIR model",
+         "KC2G only (current conditions)", "CCIR model only (monthly median, any date)"]
 REFRESH_S = 15 * 60       # KC2G updates about every 15 minutes; don't ask more often
 STATUS_COLOURS = {iono.STATUS_F2: "#2ca02c", iono.STATUS_ABOVE: "#d62728", iono.STATUS_NO_DATA: "#9e9e9e"}
 STATUS_LABELS = {iono.STATUS_F2: "F2 can support it", iono.STATUS_ABOVE: "Above F2 MUF (Es? scatter?)",
@@ -114,6 +126,114 @@ def load_conditions(max_age_h=3.0):
     fresh, _ = iono.parse_stations(_load("stations.json"), t, max_age_h)
     return iono.Conditions(t, iono.ContourField(_load("mufd.geojson")), iono.ContourField(_load("fof2.geojson")),
                            iono.ContourField(_load("hmf2.geojson")), fresh)
+
+
+def _download(url, path, feedback):
+    req = QgsBlockingNetworkRequest()
+    err = req.get(QNetworkRequest(QUrl(url)), True, feedback)
+    if err != QgsBlockingNetworkRequest.NoError:
+        raise QgsProcessingException(f"Download failed ({url}): {req.errorMessage()}")
+    data = bytes(req.reply().content())
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    tmp = path + ".part"
+    with open(tmp, "wb") as f:
+        f.write(data)
+    os.replace(tmp, path)
+    return data
+
+
+def ccir_dir():
+    return os.path.join(QgsApplication.qgisSettingsDirPath(), "maidenhead_mapper", "ccir")
+
+
+def load_ccir_model(feedback):
+    """The CCIR model; downloads the 12 coefficient files (~0.5 MB) once."""
+    from ..core import ccir
+    months = {}
+    for m in range(1, 13):
+        path = os.path.join(ccir_dir(), f"ccir{m + 10}.asc")
+        if not os.path.isfile(path):
+            if m == 1:
+                feedback.pushInfo(QCoreApplication.translate("ionosphere", "Downloading CCIR coefficients (once)"))
+            _download(CCIR_URL.format(m + 10), path, feedback)
+        with open(path, encoding="ascii", errors="replace") as f:
+            months[m] = ccir.parse(f.read())
+    return ccir.Model(months)
+
+
+def load_sunspots(feedback):
+    """(smoothed, monthly) SILSO sunspot dicts, refreshed weekly; empty on failure."""
+    from ..core import ccir
+    out = []
+    for name, url in SILSO.items():
+        path = os.path.join(ccir_dir(), name)
+        try:
+            if not os.path.isfile(path) or time.time() - os.path.getmtime(path) > SILSO_REFRESH_S:
+                _download(url, path, feedback)
+        except QgsProcessingException as exc:
+            feedback.pushWarning(f"Sunspot numbers: {exc}")
+        try:
+            with open(path, encoding="utf-8", errors="replace") as f:
+                out.append(ccir.parse_silso(f.read()))
+        except OSError:
+            out.append({})
+    return out[0], out[1]
+
+
+class IonoSource:
+    """Ionosphere for a path's time: KC2G (current) or the CCIR model (any date)."""
+
+    def __init__(self, feedback, mode=MODE_AUTO, max_age_h=3.0, r12=None, refresh=True):
+        self.mode, self.max_age, self.r12_manual = mode, max_age_h * 3600, r12
+        self.kc2g = self.model = None
+        self.smoothed = self.monthly = self.essn = None
+        self._model_cache = {}
+        self.used = {}
+        if mode in (MODE_AUTO, MODE_KC2G):
+            try:
+                if refresh or cached_time() is None:
+                    fetch(feedback)
+                self.kc2g = load_conditions()
+                feedback.pushInfo(QCoreApplication.translate("ionosphere", "KC2G data from {:%Y-%m-%d %H:%M} UTC; "
+                                                             "{} current ionosonde(s)").format(self.kc2g.time,
+                                                                                               len(self.kc2g.ionosondes)))
+            except (QgsProcessingException, OSError, ValueError) as exc:
+                if mode == MODE_KC2G:
+                    raise QgsProcessingException(f"No KC2G data: {exc}")
+                feedback.pushWarning(f"No KC2G data ({exc}); using the CCIR model")
+        if mode in (MODE_AUTO, MODE_MODEL):
+            self.model = load_ccir_model(feedback)
+            if not r12:
+                self.smoothed, self.monthly = load_sunspots(feedback)
+                try:
+                    self.essn = _load("essn.json")
+                except (OSError, ValueError):
+                    self.essn = None
+
+    def r12(self, when):
+        from ..core import ccir
+        if self.r12_manual:
+            return self.r12_manual, "given"
+        return ccir.r12_for(when, self.smoothed, self.monthly, self.essn)
+
+    def conditions(self, when):
+        """(conditions or None, label, note) for a path at `when` (None = now)."""
+        k = self.kc2g
+        if k is not None and (when is None or abs((when - k.time).total_seconds()) <= self.max_age):
+            return k, "KC2G", ""
+        if self.model is None:
+            gap = abs((when - k.time).total_seconds()) / 3600 if (k and when) else None
+            return None, "", (f"path {gap:,.1f} h from the KC2G data" if gap else "no ionosphere data")
+        t = when or _dt.datetime.now(_dt.timezone.utc)
+        t = t.replace(minute=t.minute - t.minute % 15, second=0, microsecond=0)
+        r, src = self.r12(t)
+        if r is None:
+            return None, "", f"no sunspot number for {t:%Y-%m}; enter one"
+        key = (t, round(r))
+        if key not in self._model_cache:
+            self._model_cache[key] = self.model.conditions(t, r)
+        label = f"CCIR median, R12 {r:.0f} ({src})"
+        return self._model_cache[key], label, ""
 
 
 def _categorized(attr, geometry):
@@ -258,10 +378,12 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
     MYGRID = "MYGRID"
     MAX_AGE = "MAX_AGE"
     REFRESH = "REFRESH"
+    SOURCE = "SOURCE"
+    R12 = "R12"
     OUTPUT = "OUTPUT"
     REFLECTIONS = "REFLECTIONS"
 
-    NEW_FIELDS = [("iono_utc", DATETIME), ("iono_note", STRING), ("freq_mhz", DOUBLE), ("f2_status", STRING),
+    NEW_FIELDS = [("iono_utc", DATETIME), ("iono_source", STRING), ("iono_note", STRING), ("freq_mhz", DOUBLE), ("f2_status", STRING),
                   ("muf_mhz", DOUBLE), ("fof2_mhz", DOUBLE), ("hmf2_km", DOUBLE), ("hops_iono", INT),
                   ("takeoff_iono", DOUBLE), ("bands_f2", STRING)]
 
@@ -296,8 +418,12 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             "• bands_f2: which of the path's bands F2 supports\n\n"
             "Exchange layers use grid_a/grid_b; station layers use grid and My grid. The band's FT8 "
             "frequency stands for it; a station on several bands is judged on its highest.\n\n"
-            "Paths whose last_utc is more than the time limit from the data get 'no data': KC2G "
-            "has no history, so this is for current activity only.")
+            "Ionosphere source (iono_source says which was used per path):\n"
+            "• KC2G: current ionosonde-corrected maps, for paths within the time limit of the data\n"
+            "• CCIR model (ITU-R P.1239, as in IRI): the monthly median for the path's own date, "
+            "time and sunspot number, so past logs can be checked. Typical conditions, not that "
+            "day's: expect foF2 within ~20%. The sunspot number comes from SILSO (Royal "
+            "Observatory of Belgium) or KC2G, or enter one.")
 
     def initAlgorithm(self, config=None):  # noqa: N802
         self.addParameter(QgsProcessingParameterFeatureSource(
@@ -310,6 +436,11 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             QgsProcessingParameterNumber.Double, defaultValue=3.0, minValue=0.1, maxValue=48.0))
         self.addParameter(QgsProcessingParameterBoolean(
             self.REFRESH, self.tr("Download fresh data if the cache is over 15 minutes old"), defaultValue=True))
+        self.addParameter(QgsProcessingParameterEnum(
+            self.SOURCE, self.tr("Ionosphere source"), options=MODES, defaultValue=MODE_AUTO))
+        self.addParameter(QgsProcessingParameterNumber(
+            self.R12, self.tr("Sunspot number R12 for the model (0 = look it up)"), QgsProcessingParameterNumber.Double,
+            defaultValue=0.0, minValue=0.0, maxValue=400.0))
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.OUTPUT, self.tr("Paths with ionosphere"), QgsProcessing.TypeVectorAnyGeometry))
         self.addParameter(QgsProcessingParameterFeatureSink(
@@ -332,15 +463,10 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
         if not reader.exchanges:
             feedback.pushInfo(self.tr("My grid: {}").format(my_grid))
 
-        if self.parameterAsBool(parameters, self.REFRESH, context) or cached_time() is None:
-            fetch(feedback)
-        try:
-            cond = load_conditions()
-        except (OSError, ValueError) as exc:
-            raise QgsProcessingException(self.tr("No KC2G data cached; run with download on. ({})").format(exc))
-        feedback.pushInfo(self.tr("Ionosphere from KC2G at {:%Y-%m-%d %H:%M} UTC; {} current ionosonde(s) "
-                                  "used to correct the maps").format(cond.time, len(cond.ionosondes)))
-        max_age = self.parameterAsDouble(parameters, self.MAX_AGE, context) * 3600
+        src = IonoSource(feedback, self.parameterAsEnum(parameters, self.SOURCE, context),
+                         self.parameterAsDouble(parameters, self.MAX_AGE, context),
+                         self.parameterAsDouble(parameters, self.R12, context) or None,
+                         self.parameterAsBool(parameters, self.REFRESH, context))
 
         out_fields = QgsFields(source.fields())
         for name, kind in self.NEW_FIELDS:
@@ -358,26 +484,27 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
         rsink, rdest = self.parameterAsSink(parameters, self.REFLECTIONS, context, rfields, QgsWkbTypes.Point, WGS84)
 
         counts = {iono.STATUS_F2: 0, iono.STATUS_ABOVE: 0, iono.STATUS_NO_DATA: 0}
+        labels = {}
         total = source.featureCount() or 1
-        iono_q = utc_qdatetime(cond.time)
         for i, f in enumerate(source.getFeatures()):
             if feedback.isCanceled():
                 break
             feedback.setProgress(100.0 * i / total)
             p = reader.read(f)
             ga, gb, calls, freqs, when = p["ga"], p["gb"], p["calls"], p["bands"], p["when"]
-            note, result, freq = "", None, None
+            note, result, freq, cond, label = "", None, None, None, ""
             if freqs:
                 band, freq = max(freqs, key=lambda bf: bf[1])
             if not p["ok"]:
                 note = "no grid"
             elif freq is None:
                 note = "no band"
-            elif when is not None and abs((when - cond.time).total_seconds()) > max_age:
-                note = f"path {abs((when - cond.time).total_seconds()) / 3600:,.1f} h from the ionosphere data"
             else:
-                (x1, y1), (x2, y2) = mh.center(ga), mh.center(gb)
-                result = iono.analyse_path(x1, y1, x2, y2, freq, cond)
+                cond, label, note = src.conditions(when)
+                if cond is not None:
+                    (x1, y1), (x2, y2) = mh.center(ga), mh.center(gb)
+                    result = iono.analyse_path(x1, y1, x2, y2, freq, cond)
+                    labels[label.split(",")[0]] = labels.get(label.split(",")[0], 0) + 1
             status = result.status if result else iono.STATUS_NO_DATA
             counts[status] += 1
             bands_ok = ""
@@ -388,7 +515,8 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             out.setGeometry(f.geometry())
             for name in names:
                 out[name] = f[name]
-            out["iono_utc"], out["iono_note"], out["freq_mhz"], out["f2_status"] = iono_q, note, freq, status
+            out["iono_utc"] = utc_qdatetime(cond.time) if cond is not None and cond.time else None
+            out["iono_source"], out["iono_note"], out["freq_mhz"], out["f2_status"] = label, note, freq, status
             if result:
                 out["muf_mhz"], out["fof2_mhz"], out["hmf2_km"] = result.muf_mhz, result.fof2_mhz, result.hmf2_km
                 out["hops_iono"], out["takeoff_iono"], out["bands_f2"] = result.hops, result.takeoff_deg, bands_ok
@@ -403,14 +531,15 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
 
         feedback.pushInfo(self.tr("{} path(s): {} F2, {} above the F2 MUF, {} no data").format(
             sum(counts.values()), counts[iono.STATUS_F2], counts[iono.STATUS_ABOVE], counts[iono.STATUS_NO_DATA]))
+        if labels:
+            feedback.pushInfo(self.tr("Ionosphere used: {}").format(", ".join(f"{k} {n}" for k, n in labels.items())))
         geometry = "line" if QgsWkbTypes.geometryType(source.wkbType()) == QgsWkbTypes.LineGeometry else "point"
-        styling.attach_styler(context, dest, self.tr("{} · ionosphere {:%H:%M} UTC").format(
-            source.sourceName() or "Paths", cond.time),
+        styling.attach_styler(context, dest, self.tr("{} · ionosphere").format(source.sourceName() or "Paths"),
             styling.LayerStyler(lambda: _categorized("f2_status", geometry)))
         results = {self.OUTPUT: dest}
         if rsink is not None:
             results[self.REFLECTIONS] = rdest
-            styling.attach_styler(context, rdest, self.tr("{} · reflection points {:%H:%M} UTC").format(
-                source.sourceName() or "Paths", cond.time),
+            styling.attach_styler(context, rdest, self.tr("{} · reflection points").format(
+                source.sourceName() or "Paths"),
                                   styling.LayerStyler(lambda: _categorized("f2_status", "point")))
         return results

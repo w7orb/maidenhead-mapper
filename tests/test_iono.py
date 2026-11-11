@@ -96,3 +96,15 @@ def test_ionosonde_nudges_map_nearby_only():
     assert c.at(0, 30) == pytest.approx((7.0, 300.0, 21.0), abs=1e-6)   # far away: the map
     low = iono.Ionosonde("Y", "y", 0.0, 0.0, None, 9.0, 280.0, 30.0, None, None, confidence=10)
     assert iono.Conditions(None, flat(21.0), flat(7.0), flat(300.0), [low]).at(0, 0) == (7.0, 300.0, 21.0)
+
+
+def test_long_paths_use_p533_control_points():
+    # 10,000 km along the equator, MUF(3000) 20 MHz everywhere
+    lon2 = 10000 / 111.195
+    middle = iono.Conditions(None, flat(20.0), flat(7.0), flat(300.0))
+    r = iono.analyse_path(0, 0, lon2, 0, 21.0, middle)
+    assert len(r.points) == 2 and r.muf_mhz == pytest.approx(22.0)          # 1.1 x MUF(3000)
+    xs = sorted(round(x) for x, _, *_ in r.points)
+    assert xs == [round(2000 / 111.195), round(8000 / 111.195)]              # 2,000 km from each end
+    assert r.status == iono.STATUS_F2 and r.hops == 3
+    assert iono.analyse_path(0, 0, lon2, 0, 28.0, middle).status == iono.STATUS_ABOVE
