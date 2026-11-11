@@ -1,17 +1,13 @@
 """Temporary point layer mirroring LiveModel, with markers that fade by age."""
 
 from qgis.core import (
-    QgsCoordinateReferenceSystem,
-    QgsFeature,
     QgsField,
     QgsGeometry,
     QgsMarkerSymbol,
     QgsPointXY,
-    QgsProject,
     QgsProperty,
     QgsRuleBasedRenderer,
     QgsSymbol,
-    QgsVectorLayer,
 )
 
 from ..algorithms import styling
@@ -19,6 +15,7 @@ from ..algorithms.import_psk import station_fields
 from ..algorithms.qt_compat import INT, utc_qdatetime
 from ..core import hops as _hops
 from ..core import maidenhead as mh
+from .synced import SyncedLayer
 
 LAYER_NAME = "WSJT-X live"
 _OPACITY = getattr(getattr(QgsSymbol, "Property", None), "Opacity", None) or QgsSymbol.PropertyOpacity
@@ -33,7 +30,8 @@ def fade_expression(fade_minutes):
     )
 
 
-def live_renderer(fade_minutes):
+def live_renderer(fade_minutes=None):
+    """Worked stars and SNR-coloured circles; fading unless fade_minutes is None."""
     root = QgsRuleBasedRenderer.Rule(None)
     worked = QgsMarkerSymbol.createSimple({"name": "star", "color": "#d62728", "size": "4",
                                            "outline_color": "255,255,255,220", "outline_width": "0.25"})
@@ -43,9 +41,10 @@ def live_renderer(fade_minutes):
                                             "outline_color": "255,255,255,200", "outline_width": "0.2"})
         expr = f"\"direction\" = 'heard' AND \"snr_best\" > {lo} AND \"snr_best\" <= {hi}"
         root.appendChild(QgsRuleBasedRenderer.Rule(sym, 0, 0, expr, f"Heard, best SNR {label}"))
-    prop = QgsProperty.fromExpression(fade_expression(fade_minutes))
-    for rule in root.children():
-        rule.symbol().setDataDefinedProperty(_OPACITY, prop)
+    if fade_minutes is not None:
+        prop = QgsProperty.fromExpression(fade_expression(fade_minutes))
+        for rule in root.children():
+            rule.symbol().setDataDefinedProperty(_OPACITY, prop)
     return QgsRuleBasedRenderer(root)
 
 
@@ -74,72 +73,28 @@ def station_point(st):
     return QgsGeometry.fromPointXY(QgsPointXY(lon, lat))
 
 
-class LiveLayer:
-    """Owns the live layer and applies batches of changed stations to it."""
+class LiveLayer(SyncedLayer):
+    """Live station markers, fading by age."""
 
-    def __init__(self, model, fade_minutes=30):
-        self.model = model
-        self.fade_minutes = fade_minutes
-        self.layer = None
-        self.fids = {}
+    NAME = LAYER_NAME
+    GEOMETRY = "Point"
 
-    def _create(self):
-        layer = QgsVectorLayer("Point?crs=EPSG:4326", LAYER_NAME, "memory")
-        layer.dataProvider().addAttributes(list(live_station_fields()))
-        layer.updateFields()
+    def fields(self):
+        return live_station_fields()
+
+    def style(self, layer):
         layer.setRenderer(live_renderer(self.fade_minutes))
         layer.setLabeling(styling.callsign_labels())
         layer.setLabelsEnabled(True)
-        QgsProject.instance().addMapLayer(layer)
-        layer.willBeDeleted.connect(self._forget)
-        self.layer, self.fids = layer, {}
-        # Re-add every placed station (e.g. after the user deleted the layer)
-        return set(self.model.stations)
 
-    def _forget(self):
-        self.layer, self.fids = None, {}
+    def keys(self, model):
+        return list(model.stations)
 
-    def set_fade(self, minutes):
-        self.fade_minutes = minutes
-        if self.layer is not None:
-            self.layer.setRenderer(live_renderer(minutes))
-            self.layer.triggerRepaint()
+    def item(self, model, key):
+        st = model.stations.get(key)
+        if st is None or not st.grid:
+            return None
+        return station_point(st), live_station_attrs(model, st)
 
-    def sync(self, keys):
-        """Apply changed stations; returns the number of features touched."""
-        if self.layer is None:
-            keys = set(keys) | self._create()
-        dp = self.layer.dataProvider()
-        new, attr_changes, geom_changes = [], {}, {}
-        for key in keys:
-            st = self.model.stations.get(key)
-            if st is None or not st.grid:
-                continue
-            geom = station_point(st)
-            attrs = live_station_attrs(self.model, st)
-            fid = self.fids.get(key)
-            if fid is None:
-                f = QgsFeature(self.layer.fields())
-                f.setGeometry(geom)
-                f.setAttributes(attrs)
-                new.append((key, f))
-            else:
-                attr_changes[fid] = dict(enumerate(attrs))
-                geom_changes[fid] = geom
-        if new:
-            ok, added = dp.addFeatures([f for _, f in new])
-            if ok:
-                for (key, _), f in zip(new, added):
-                    self.fids[key] = f.id()
-        if attr_changes:
-            dp.changeAttributeValues(attr_changes)
-            dp.changeGeometryValues(geom_changes)
-        touched = len(new) + len(attr_changes)
-        if touched:
-            self.layer.updateExtents()
-            self.layer.triggerRepaint()
-        return touched
-
-    def repaint(self):
-        if self.layer is not None:
-            self.layer.triggerRepaint()
+    def key_of(self, feature):
+        return (feature["call"], feature["direction"])

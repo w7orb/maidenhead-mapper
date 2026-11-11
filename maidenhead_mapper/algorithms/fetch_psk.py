@@ -1,6 +1,5 @@
 """Processing algorithm: Fetch reports from PSK Reporter into a folder."""
 
-import os
 import time
 
 from qgis.core import (

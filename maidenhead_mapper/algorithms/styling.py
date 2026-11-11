@@ -106,6 +106,34 @@ class StationStyler(QgsProcessingLayerPostProcessorInterface):
         layer.triggerRepaint()
 
 
+class LayerStyler(QgsProcessingLayerPostProcessorInterface):
+    """Applies renderer/labeling factories (called on the main thread) and properties."""
+
+    def __init__(self, renderer=None, labeling=None, properties=None):
+        super().__init__()
+        self.renderer, self.labeling, self.properties = renderer, labeling, properties or {}
+
+    def postProcessLayer(self, layer, context, feedback):  # noqa: N802
+        if self.renderer:
+            layer.setRenderer(self.renderer())
+        if self.labeling:
+            layer.setLabeling(self.labeling())
+            layer.setLabelsEnabled(True)
+        for key, value in self.properties.items():
+            layer.setCustomProperty(key, value)
+        layer.triggerRepaint()
+
+
+def attach_styler(context, dest_id, name, styler):
+    """Name an output layer and run `styler` on it once Processing loads it."""
+    if not context.willLoadLayerOnCompletion(dest_id):
+        return
+    details = context.layerToLoadOnCompletionDetails(dest_id)
+    details.name = name
+    _keep_alive.append(styler)
+    details.setPostProcessor(styler)
+
+
 def attach(context, dest_id, name, style, properties=None):
     """Name and style an output layer once Processing loads it.
 

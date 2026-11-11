@@ -5,7 +5,8 @@ QGIS plugin for amateur-radio Maidenhead maps.
 - **Create Maidenhead grid**: field (2-char, 20°×10°) and square (4-char, 2°×1°) polygon layers with a `locator` attribute. They come pre-styled and labelled; squares appear when zoomed in past 1:20,000,000.
 - **Fetch from PSK Reporter**: downloads the last 1–24 hours of reports for a callsign into a folder, then maps the whole folder. It keeps to PSK Reporter's limit of one query per 5 minutes.
 - **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*, or from [pskreporter-analytics](https://github.com/cwtews/pskreporter-analytics)) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
-- **Activity timeline**: a chart of reports per hour for a PSK Reporter layer. Drag across it to map only those hours.
+- **Import WSJT-X ALL.TXT**: replays WSJT-X logs through the live map's logic, giving station markers and exchange lines (including exchanges between other stations) for past sessions.
+- **Activity timeline**: a chart of reports per hour for any of the above (PSK Reporter, ALL.TXT, live or saved sessions). Drag across it to map only those hours.
 - **WSJT-X live map**: listens to WSJT-X's UDP feed and plots every station it decodes. Markers update every 2 s and fade over a set time since each station was last heard. Stations you log a QSO with become red stars. Works alongside JTAlert/GridTracker via multicast.
 
 The grid always spans exactly -180..180 / -90..90. The earlier hand-built grid took its extent from the OSM basemap (Web Mercator stops at ±85.05°), which shifted every field about 5° south.
@@ -49,14 +50,24 @@ Restart QGIS, then enable **Maidenhead Mapper** under *Plugins → Manage and In
 - **Locator precision**: positions use the station's most recent locator, capped here (default 6 characters).
 - **Style**: SNR (best report), band (lowest band heard), direction, or a single symbol. Restyle any time in *Layer Properties*.
 
+### Import WSJT-X ALL.TXT
+
+*Plugins → Maidenhead Mapper → Import WSJT-X ALL.TXT…*
+
+- **ALL.TXT file(s)**: one or more logs (WSJT-X 2.1+ format). Don't mix two receivers' logs from the same time; that counts everything twice.
+- **My callsign / grid**: your callsign marks your own QSOs, and ALL.TXT `Tx` lines fill in your side of them. Your grid is used for distance, bearing and hops.
+- Outputs two layers: **WSJT-X stations (ALL.TXT)** and **WSJT-X exchanges (ALL.TXT)**, with the same fields and colours as the live map (no fading).
+
 ### Activity timeline
 
-*Plugins → Maidenhead Mapper → Activity timeline* opens a panel under the map. Choose a station layer made by *Fetch* or *Import*.
+*Plugins → Maidenhead Mapper → Activity timeline* opens a panel under the map. Choose a dataset: a PSK Reporter station layer, an ALL.TXT import, a saved live session, or **WSJT-X live map (running)**.
 
-- Bars show reports per UTC hour: blue = stations I heard, orange = stations that heard me. Hover over a bar for its counts.
+- Bars show reports per UTC hour. For PSK Reporter: blue = stations I heard, orange = stations that heard me. For WSJT-X data: blue = decodes, orange = decodes addressed to me (they heard me). Hover over a bar for its counts.
 - **Drag** across the bars to pick hours. The map updates as you drag: markers are rebuilt from only those reports, so counts, SNR, bands and first/last times describe that window. Attribute tables and labels update too, and the layer's name shows the window (e.g. *PSK Reporter stations · 11-24 08:00–20:00 UTC*).
 - Below the chart: stations heard / heard me, stations per band, and the farthest and strongest station in the window. **Double-click** or **All hours** picks everything; **◀ ▶** step the window by its own length.
-- The layer remembers its folder, filters and chosen hours, so this works again after reopening the project. If more pulls have been added to the folder, they are read in.
+- For WSJT-X data, both the stations and exchanges layers are rebuilt by replaying the log for the chosen hours.
+- With the **running live map**, choosing hours holds live updates (the listener keeps recording). **All hours** returns to live.
+- Layers remember their source (folder, files or session file) and the chosen hours, so this works again after reopening the project. New pulls or log entries are read in.
 - The timeline replaces the layer's features. It refuses while the layer is being edited. Choosing a layer turns it on; other station layers above it in the list can still cover its markers.
 
 ### WSJT-X live map
@@ -88,6 +99,8 @@ With only WSJT-X and QGIS, *Unicast* on `127.0.0.1:2237` (the WSJT-X default) al
 
   Fields: `a_hears_b`, `b_hears_a` (reports exchanged), `me_hears_a`, `me_hears_b` (your decodes), `stage` (started / one report / both reports / confirmed), `paths` (label, e.g. `N5ER→AH6U +07  AH6U→N5ER -04`, read as "signal from → to, arrived at"), `transcript`, `band`, `distance_km`. Messages between the same pair and band within 3 minutes belong to one exchange.
 - Colours: red = your QSOs (your side comes from WSJT-X's Status and QSO Logged, since your own transmissions aren't decoded), green = confirmed, blue = both reports, dashed purple = one report, dotted grey = started. Lines fade like markers; report labels appear when zoomed in past 1:10M.
+- Every station and exchange has `hops` and `takeoff_deg`: the fewest F2 hops (layer at 300 km, takeoff of at least 2°) that can cover the distance, and the takeoff angle that needs. This is geometry only: real paths may use more hops, a different layer height, or sporadic-E.
+- **Save session to a GeoPackage**: tick it and choose a folder before Start. Each new session file is `wsjtx_session_YYYYMMDD_HHMMSS.gpkg` with `stations`, `exchanges` and a `log` of every WSJT-X message, written every 2 s. The layers on the map *are* the file's tables, so nothing is lost if QGIS closes, and the timeline can replay any hours from the log later.
 - A line is drawn once both stations' grids are known. FT8 only sends grids when calling or answering, so some exchanges wait; the panel shows how many are on the map.
 - The layer *WSJT-X live* is temporary. Use right-click → *Make Permanent* to save a session. If you delete it, it is rebuilt on the next update.
 
@@ -105,10 +118,11 @@ python tools/replay_alltxt.py path\to\ALL.TXT --speed 30 --de-call MYCALL --de-g
 maidenhead_mapper/
   core/          pure Python, no QGIS imports: locator math, bands, PSK Reporter
                  loading/summaries/queries, hourly counts, WSJT-X UDP protocol,
-                 FT8 message parsing, live model
+                 FT8 message parsing, exchanges, live model + replay, ALL.TXT,
+                 hop geometry
   algorithms/    Processing algorithms and shared styling
-  timeline/      activity timeline panel and its bar chart
-  live/          UDP listener, live layer and dock panel
+  timeline/      activity timeline panel, bar chart, and data sources
+  live/          UDP listener, live station/exchange layers, session saving, dock panel
   provider.py    Processing provider (id "maidenhead")
   plugin.py      menu/toolbar wiring
 tools/           replay_alltxt.py (fake WSJT-X from a recorded log), package.py (release zip)

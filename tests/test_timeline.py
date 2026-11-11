@@ -48,3 +48,14 @@ def test_window_label():
     end = T0 + dt.timedelta(hours=12)
     assert timeline.window_label(T0, end) == "11-10 18:00 – 11-11 06:00 UTC"
     assert timeline.window_label(T0, T0 + dt.timedelta(hours=2)) == "11-10 18:00–20:00 UTC"
+
+
+def test_hourly_from_log():
+    from maidenhead_mapper.core import wsjtx_udp as w
+    log = [(T0, w.Status("c", dial_hz=14074000, mode="FT8", de_call="W7ORB/P")),
+           (T0 + dt.timedelta(minutes=1), w.Decode("c", message="CQ K1ABC FN42")),
+           (T0 + dt.timedelta(minutes=2), w.Decode("c", message="W7ORB K1ABC -10")),
+           (T0 + dt.timedelta(hours=2), w.Decode("c", message="K1ABC W9XYZ R-05"))]
+    h = timeline.hourly_from_log(log)
+    assert h.start == T0 and h.heard == [1, 0, 1] and h.heard_me == [1, 0, 0]
+    assert timeline.hourly_from_log(log, my_call="N0CALL").heard_me == [0, 0, 0]

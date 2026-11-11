@@ -14,6 +14,7 @@ ACTIONS = [
     ("maidenhead:create_grid", "Create Maidenhead grid…"),
     ("maidenhead:fetch_psk", "Fetch from PSK Reporter…"),
     ("maidenhead:import_psk", "Import PSK Reporter reports…"),
+    ("maidenhead:import_alltxt", "Import WSJT-X ALL.TXT…"),
 ]
 
 

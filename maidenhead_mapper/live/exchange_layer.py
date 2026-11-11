@@ -9,12 +9,10 @@ from qgis.core import (
     QgsLineSymbol,
     QgsPalLayerSettings,
     QgsPointXY,
-    QgsProject,
     QgsProperty,
     QgsRuleBasedRenderer,
     QgsTextBufferSettings,
     QgsTextFormat,
-    QgsVectorLayer,
     QgsVectorLayerSimpleLabeling,
 )
 from qgis.PyQt.QtGui import QColor
@@ -24,6 +22,7 @@ from ..core import exchange as x
 from ..core import hops as _hops
 from ..core import maidenhead as mh
 from .layer import _OPACITY
+from .synced import SyncedLayer
 
 LAYER_NAME = "WSJT-X exchanges"
 
@@ -52,15 +51,17 @@ def fade_expression(fade_minutes):
             f"/ {float(fade_minutes)}))")
 
 
-def renderer(fade_minutes):
+def renderer(fade_minutes=None):
+    """Lines styled by stage; fading unless fade_minutes is None."""
     root = QgsRuleBasedRenderer.Rule(None)
-    prop = QgsProperty.fromExpression(fade_expression(fade_minutes))
+    prop = QgsProperty.fromExpression(fade_expression(fade_minutes)) if fade_minutes is not None else None
     for expr, label, colour, width, dash in STYLES:
         props = {"line_color": colour, "line_width": str(width), "capstyle": "round"}
         if dash:
             props.update({"use_custom_dash": "1", "customdash": dash, "customdash_unit": "MM"})
         sym = QgsLineSymbol.createSimple(props)
-        sym.setDataDefinedProperty(_OPACITY, prop)
+        if prop is not None:
+            sym.setDataDefinedProperty(_OPACITY, prop)
         root.appendChild(QgsRuleBasedRenderer.Rule(sym, 0, 0, expr, label))
     # Rules are exclusive top-down: later rules only catch what earlier ones didn't
     for i, rule in enumerate(root.children()):
@@ -140,82 +141,46 @@ def exchange_features(model):
     return out, unplaced
 
 
-class ExchangeLayer:
-    """Owns the exchanges layer; draws an exchange once both grids are known."""
+class ExchangeLayer(SyncedLayer):
+    """One line per exchange; drawn once both grids are known."""
+
+    NAME = LAYER_NAME
+    GEOMETRY = "MultiLineString"
 
     def __init__(self, model, fade_minutes=30):
-        self.model = model
-        self.fade_minutes = fade_minutes
-        self.layer = None
-        self.fids = {}
+        super().__init__(model, fade_minutes)
         self.unplaced = set()    # exchange ids waiting for a grid
 
-    def _create(self):
-        layer = QgsVectorLayer("MultiLineString?crs=EPSG:4326", LAYER_NAME, "memory")
-        layer.dataProvider().addAttributes(list(exchange_fields()))
-        layer.updateFields()
+    def fields(self):
+        return exchange_fields()
+
+    def style(self, layer):
         layer.setRenderer(renderer(self.fade_minutes))
         layer.setLabeling(labels())
         layer.setLabelsEnabled(True)
-        QgsProject.instance().addMapLayer(layer)
-        layer.willBeDeleted.connect(self._forget)
-        self.layer, self.fids = layer, {}
-        return set(self.model.exchanges.exchanges)
 
-    def _forget(self):
-        self.layer, self.fids = None, {}
+    def keys(self, model):
+        return list(model.exchanges.exchanges)
 
-    def set_fade(self, minutes):
-        self.fade_minutes = minutes
-        if self.layer is not None:
-            self.layer.setRenderer(renderer(minutes))
-            self.layer.triggerRepaint()
+    def item(self, model, key):
+        ex = model.exchanges.exchanges.get(key)
+        if ex is None:
+            return None
+        ga, gb = model.grid_of(ex.a), model.grid_of(ex.b)
+        if not (ga and gb):
+            if model is self.model:
+                self.unplaced.add(key)
+            return None
+        if model is self.model:
+            self.unplaced.discard(key)
+        return exchange_geometry(ga, gb), exchange_attrs(ex, ga, gb)
+
+    def key_of(self, feature):
+        return feature["id"]
+
+    def sync(self, ids):
+        """Changed exchanges plus any still waiting for a grid."""
+        return super().sync(set(ids) | self.unplaced)
 
     def placed_count(self):
         return len(self.fids)
-
-    def sync(self, ids):
-        """Apply changed exchanges (plus any still waiting for a grid)."""
-        ids = set(ids) | self.unplaced
-        if self.layer is None:
-            if not ids and not self.model.exchanges.exchanges:
-                return 0
-            ids |= self._create()
-        dp = self.layer.dataProvider()
-        new, attr_changes, geom_changes = [], {}, {}
-        for i in ids:
-            ex = self.model.exchanges.exchanges.get(i)
-            if ex is None:
-                continue
-            ga, gb = self.model.grid_of(ex.a), self.model.grid_of(ex.b)
-            if not (ga and gb):
-                self.unplaced.add(i)
-                continue
-            self.unplaced.discard(i)
-            geom, attrs = exchange_geometry(ga, gb), exchange_attrs(ex, ga, gb)
-            fid = self.fids.get(i)
-            if fid is None:
-                f = QgsFeature(self.layer.fields())
-                f.setGeometry(geom)
-                f.setAttributes(attrs)
-                new.append((i, f))
-            else:
-                attr_changes[fid] = dict(enumerate(attrs))
-                geom_changes[fid] = geom
-        if new:
-            ok, added = dp.addFeatures([f for _, f in new])
-            if ok:
-                for (i, _), f in zip(new, added):
-                    self.fids[i] = f.id()
-        if attr_changes:
-            dp.changeAttributeValues(attr_changes)
-            dp.changeGeometryValues(geom_changes)
-        touched = len(new) + len(attr_changes)
-        if touched:
-            self.layer.updateExtents()
-            self.layer.triggerRepaint()
-        return touched
-
-    def repaint(self):
-        if self.layer is not None:
-            self.layer.triggerRepaint()

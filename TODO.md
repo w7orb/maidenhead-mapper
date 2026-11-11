@@ -5,10 +5,10 @@
 
 | # | Item | Effort | Impact | Needs | Why |
 |---|---|---|---|---|---|
-| 1 | Import WSJT-X ALL.TXT | S | **High** | — | The exchange tracker and an ALL.TXT reader already exist. Maps all your past logs and unlocks 6 and 7. |
-| 2 | Save live sessions automatically | S–M | Medium | — | Protects data; the work is appending to a GeoPackage safely and picking up again after a restart. |
-| 3 | Timeline for live layers | M | Medium | — | The live model keeps per-station totals, not each decode, so it needs a decode history and a different rebuild that works with fading. |
-| 4 | Hop geometry and takeoff angle | S–M | Medium (High with 5) | — | Pure maths and new fields. With assumed heights, hop counts stay ambiguous. |
+| 1 | ~~Import WSJT-X ALL.TXT~~ **done** | S | **High** | — | The exchange tracker and an ALL.TXT reader already exist. Maps all your past logs and unlocks 6 and 7. |
+| 2 | ~~Save live sessions automatically~~ **done** | S–M | Medium | — | Protects data; the work is appending to a GeoPackage safely and picking up again after a restart. |
+| 3 | ~~Timeline for live layers~~ **done** | M | Medium | — | The live model keeps per-station totals, not each decode, so it needs a decode history and a different rebuild that works with fading. |
+| 4 | ~~Hop geometry and takeoff angle~~ **done** | S–M | Medium (High with 5) | — | Pure maths and new fields. With assumed heights, hop counts stay ambiguous. |
 | 5 | Ionosonde / model enrichment | M–L | **High** | — | Fetching, sampling maps at reflection points, matching times. No historical API for measured data; PyIRI adds a numpy dependency (bundled with QGIS, but optional). |
 | 6 | Antenna A/B comparison | S (after 1) | **High** | 1 (4 for angles) | Already prototyped on your data. Practical and unusual: most hams can't measure this today. |
 | 7 | Station balance from exchanges | M | Medium | 1 helps | Least-squares fit plus confidence. Needs about 100+ exchanges per station, so value grows with data. |
@@ -17,7 +17,7 @@
 | 10 | Skip distance and hop structure over time | M | Medium | 3 for live data | Stats plus a chart in the timeline; shows changes, not absolute values. |
 | 11 | Band hotter/colder than usual | M | Low–Medium | 2, regular fetches | Needs weeks of collected data before it says anything; modest accuracy (r ≈ 0.3). |
 
-**Suggested order**: 1 → 6 → 4 → 5 → 8. These are quick, high-value items, each building on the previous one. Then 2 and 3 for the live side, and 7, 9, 10 and 11 as data accumulates.
+**Done 2026-11-11**: 1, 2, 3, 4. **Suggested next**: 6 → 5 → 8. These are quick, high-value items, each building on the previous one. Then 2 and 3 for the live side, and 7, 9, 10 and 11 as data accumulates.
 
 ## Details
 

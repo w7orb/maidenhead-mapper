@@ -15,7 +15,7 @@ The encoder is used by the tests and tools/replay_alltxt.py.
 
 import datetime as _dt
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Optional
 
 MAGIC = 0xADBCCBDA

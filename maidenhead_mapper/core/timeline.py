@@ -101,3 +101,28 @@ def window_label(start, end):
     if start.date() == end.date():
         return f"{start:%m-%d %H:%M}–{end:%H:%M} UTC"
     return f"{start:%m-%d %H:%M} – {end:%m-%d %H:%M} UTC"
+
+
+def hourly_from_log(log, my_call=""):
+    """Hourly counts of decodes in a live/ALL.TXT log: 'heard' for each decode,
+    'heard_me' for decodes addressed to my_call (they decoded me). my_call
+    defaults to the first Status's own callsign."""
+    from . import ft8msg
+    from . import wsjtx_udp as w
+
+    if not my_call:
+        my_call = next((m.de_call for _, m in log if isinstance(m, w.Status) and m.de_call), "")
+    me = _base(my_call)
+    rows = []
+    for t, m in log:
+        if not isinstance(m, w.Decode):
+            continue
+        p = ft8msg.parse_message(m.message)
+        to_me = bool(me) and p is not None and p.to is not None and _base(p.to) == me
+        rows.append({"time": t, "direction": "heard_me" if to_me else "heard"})
+    return hourly(rows)
+
+
+def _base(call):
+    parts = [p for p in (call or "").upper().split("/") if p]
+    return max(parts, key=len) if parts else ""
