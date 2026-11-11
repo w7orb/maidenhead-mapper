@@ -144,7 +144,16 @@ class PskSource(Source):
         lines = [f"<b>{w.heard + w.heard_me:,}</b> station(s): "
                  f"<span style='color:#1f77b4'>{w.heard:,} heard</span>, "
                  f"<span style='color:#ff7f0e'>{w.heard_me:,} heard me</span>"]
-        return lines + _common_lines(w)
+        return lines + _common_lines(w) + _skip_line(summary)
+
+
+def _skip_line(rows):
+    """'Skip edge: 10m ~2,450 km, ...' from station rows (distance_km, bands)."""
+    from ..core import skip
+    pairs = [(b, r.distance_km) for r in rows if r.distance_km is not None
+             for b in str(r.bands or "").split(",") if b]
+    line = skip.summary_line(pairs)
+    return [f"Skip edge: {line}"] if line else []
 
 
 def _common_lines(w):
@@ -178,7 +187,7 @@ def _model_lines(model):
              f"Exchanges: {len(model.exchanges.exchanges):,}: {n[x.CONFIRMED]} confirmed, "
              f"{n[x.BOTH_REPORTS]} both reports, {n[x.ONE_REPORT]} one report, {n[x.STARTED]} started"
              + (f"; {mine} mine" if mine else "")]
-    return lines + _common_lines(w)
+    return lines + _common_lines(w) + _skip_line(rows)
 
 
 class LogSource(Source):

@@ -3,21 +3,11 @@
 from qgis.core import QgsApplication
 from qgis.PyQt.QtCore import Qt
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction
+from qgis.PyQt.QtWidgets import QAction, QMenu, QToolButton
 
 from .provider import ICON, MaidenheadProvider
 
 MENU = "&Maidenhead Mapper"
-
-# (algorithm id, menu text)
-ACTIONS = [
-    ("maidenhead:create_grid", "Create Maidenhead grid…"),
-    ("maidenhead:fetch_psk", "Fetch from PSK Reporter…"),
-    ("maidenhead:import_psk", "Import PSK Reporter reports…"),
-    ("maidenhead:import_alltxt", "Import WSJT-X ALL.TXT…"),
-    ("maidenhead:fetch_ionosphere", "Fetch ionosphere (KC2G)…"),
-    ("maidenhead:check_paths", "Check paths against the ionosphere…"),
-]
 
 
 def _live_dock(parent):
@@ -30,10 +20,36 @@ def _timeline_dock(parent):
     return TimelineDock(parent)
 
 
-# (menu text, dock factory, dock area)
-DOCKS = [
-    ("Activity timeline", _timeline_dock, Qt.DockWidgetArea.BottomDockWidgetArea),
-    ("WSJT-X live map", _live_dock, Qt.DockWidgetArea.RightDockWidgetArea),
+# dock key -> (menu text, factory, area)
+DOCKS = {
+    "timeline": ("Activity timeline", _timeline_dock, Qt.DockWidgetArea.BottomDockWidgetArea),
+    "live": ("WSJT-X live map", _live_dock, Qt.DockWidgetArea.RightDockWidgetArea),
+}
+
+# The menu, by purpose. ("alg", id, text) opens a Processing tool; ("dock", key)
+# toggles a panel; None is a separator. The ionosphere tools work on any
+# station or exchange layer and stay out of the WSJT-X section on purpose.
+LAYOUT = [
+    ("Grid", [("alg", "maidenhead:create_grid", "Create Maidenhead grid…")]),
+    ("PSK Reporter", [
+        ("alg", "maidenhead:fetch_psk", "Fetch from PSK Reporter…"),
+        ("alg", "maidenhead:import_psk", "Import PSK Reporter reports…"),
+    ]),
+    ("WSJT-X", [
+        ("dock", "live"),
+        ("alg", "maidenhead:import_alltxt", "Import WSJT-X ALL.TXT…"),
+        None,
+        ("alg", "maidenhead:station_balance", "Station balance from two-way reports…"),
+    ]),
+    ("Ionosphere", [
+        ("alg", "maidenhead:fetch_ionosphere", "Fetch ionosphere (KC2G)…"),
+        ("alg", "maidenhead:check_paths", "Check paths against the ionosphere (MUF)…"),
+        None,
+        ("alg", "maidenhead:sporadic_e", "Find sporadic-E paths…"),
+        ("alg", "maidenhead:skip_distance", "Skip distance by hour…"),
+    ]),
+    None,
+    ("dock", "timeline"),
 ]
 
 
@@ -76,8 +92,11 @@ class MaidenheadMapperPlugin:
     def __init__(self, iface):
         self.iface = iface
         self.provider = None
-        self.actions = []
-        self.toggles = []
+        self.toggles = []           # _DockToggle, in DOCKS order
+        self._toggle_by_key = {}
+        self.root = None            # QMenu holding the whole layout
+        self.menu_actions = []      # top-level actions added to Plugins > Maidenhead Mapper
+        self.toolbar_action = None
 
     def initProcessing(self):  # noqa: N802
         self.provider = MaidenheadProvider()
@@ -85,28 +104,61 @@ class MaidenheadMapperPlugin:
 
     def initGui(self):  # noqa: N802
         self.initProcessing()
-        for alg_id, text in ACTIONS:
-            action = QAction(QIcon(ICON), text, self.iface.mainWindow())
-            action.triggered.connect(lambda _=False, a=alg_id: self._open(a))
-            self._add(action)
-        for text, factory, area in DOCKS:
-            toggle = _DockToggle(self.iface, text, factory, area)
-            self.toggles.append(toggle)
-            self._add(toggle.action)
+        win = self.iface.mainWindow()
+        for key, (text, factory, area) in DOCKS.items():
+            t = _DockToggle(self.iface, text, factory, area)
+            self.toggles.append(t)
+            self._toggle_by_key[key] = t
 
-    def _add(self, action):
-        self.iface.addPluginToMenu(MENU, action)
-        self.iface.addToolBarIcon(action)
-        self.actions.append(action)
+        self.root = QMenu("Maidenhead Mapper", win)
+        self.root.setIcon(QIcon(ICON))
+        for entry in LAYOUT:
+            if entry is None:
+                self.root.addSeparator()
+            elif entry[0] == "dock":
+                self.root.addAction(self._toggle_by_key[entry[1]].action)
+            else:
+                title, items = entry
+                sub = self.root.addMenu(title)
+                for item in items:
+                    if item is None:
+                        sub.addSeparator()
+                    elif item[0] == "dock":
+                        sub.addAction(self._toggle_by_key[item[1]].action)
+                    else:
+                        _, alg_id, text = item
+                        action = QAction(text, win)
+                        action.triggered.connect(lambda _=False, a=alg_id: self._open(a))
+                        sub.addAction(action)
+
+        # Plugins > Maidenhead Mapper shows the same sections
+        for action in self.root.actions():
+            if action.isSeparator():
+                continue
+            self.iface.addPluginToMenu(MENU, action)
+            self.menu_actions.append(action)
+
+        # One toolbar button that drops down the whole menu
+        button = QToolButton(win)
+        button.setIcon(QIcon(ICON))
+        button.setToolTip("Maidenhead Mapper")
+        button.setMenu(self.root)
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.toolbar_action = self.iface.addToolBarWidget(button)
 
     def unload(self):
         for toggle in self.toggles:
             toggle.unload()
-        self.toggles = []
-        for action in self.actions:
+        self.toggles, self._toggle_by_key = [], {}
+        for action in self.menu_actions:
             self.iface.removePluginMenu(MENU, action)
-            self.iface.removeToolBarIcon(action)
-        self.actions = []
+        self.menu_actions = []
+        if self.toolbar_action is not None:
+            self.iface.removeToolBarIcon(self.toolbar_action)
+            self.toolbar_action = None
+        if self.root is not None:
+            self.root.deleteLater()
+            self.root = None
         if self.provider:
             QgsApplication.processingRegistry().removeProvider(self.provider)
             self.provider = None

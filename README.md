@@ -7,6 +7,7 @@ QGIS plugin for amateur-radio Maidenhead maps.
 - **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*, or from [pskreporter-analytics](https://github.com/cwtews/pskreporter-analytics)) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
 - **Import WSJT-X ALL.TXT**: replays WSJT-X logs through the live map's logic, giving station markers and exchange lines (including exchanges between other stations) for past sessions.
 - **Ionosphere (KC2G)**: fetch current ionosonde data and MUF/foF2/hmF2 maps, and check any station or exchange layer against them. Each path gets its MUF, layer height, hop count and whether F2 can explain it, plus a layer of reflection points.
+- **Sporadic-E, skip distance, station balance**: find paths only sporadic-E explains (with the minimum foEs), follow the skip zone hour by hour, and compare stations' signal vs receive from two-way reports.
 - **Activity timeline**: a chart of reports per hour for any of the above (PSK Reporter, ALL.TXT, live or saved sessions). Drag across it to map only those hours.
 - **WSJT-X live map**: listens to WSJT-X's UDP feed and plots every station it decodes. Markers update every 2 s and fade over a set time since each station was last heard. Stations you log a QSO with become red stars. Works alongside JTAlert/GridTracker via multicast.
 
@@ -26,7 +27,19 @@ Restart QGIS, then enable **Maidenhead Mapper** under *Plugins → Manage and In
 
 ## Use
 
-*Plugins → Maidenhead Mapper → Create Maidenhead grid…*, the toolbar button, or *Processing Toolbox → Maidenhead Mapper → Grid*.
+Everything is under *Plugins → Maidenhead Mapper* (and the toolbar button's drop-down), grouped by purpose:
+
+| Section | Tools |
+|---|---|
+| Grid | Create Maidenhead grid |
+| PSK Reporter | Fetch from PSK Reporter, Import PSK Reporter reports |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Station balance from two-way reports |
+| Ionosphere | Fetch ionosphere (KC2G), Check paths against the ionosphere (MUF), Find sporadic-E paths, Skip distance by hour |
+| (top level) | Activity timeline (panel) |
+
+The ionosphere tools take any station or exchange layer; they aren't tied to the live map. All tools are also in the *Processing Toolbox → Maidenhead Mapper*.
+
+### Create Maidenhead grid
 
 - **Grid level**: fields, squares, or both.
 - **Extent**: leave empty for the whole world (324 fields / 32,400 squares), or pick the map canvas or a layer. Any CRS works; the grid itself is always aligned to whole degrees.
@@ -71,6 +84,24 @@ Data comes from [KC2G](https://prop.kc2g.com): current GIRO/INGV ionosonde measu
   - `bands_f2`: which of the path's bands F2 supports.
   Paths more than 3 hours (adjustable) from the data get *no data*. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, one per hop, with the layer and MUF there.
 - Near a current, trusted ionosonde (confidence 50 or higher), the maps are corrected towards its measurements; the correction fades out over about 1,000 km. Contour maps can't show peaks above their top level (MUF(3000) stops at 28 MHz), and this fills that in where there's an ionosonde.
+
+### Find sporadic-E paths
+
+Paths of 500–2,300 km (one hop off a ~105 km sporadic-E layer) on 12m, 10m, 6m and up that F2 can't explain:
+- **high** confidence: 6m and up, or *Check paths* found the band above the F2 MUF;
+- **possible**: 12m/10m without ionosphere data.
+
+Each candidate is a point at the path midpoint with `foes_min_mhz`, the lowest Es critical frequency that returns that band at that range. Candidates within 500 km and 60 minutes of each other form **Es clouds** (count, bands, highest foEs).
+
+### Skip distance by hour
+
+For a PSK Reporter layer, an ALL.TXT import or a saved session: a table per band and UTC hour with the skip edge (`skip_km`, the 10th percentile of sky-wave distances, from 20+ contacts), median and 90th-percentile distance, local contacts, and the foF2 the skip edge implies. Within 3 hours of cached KC2G data it adds KC2G's foF2 at your location for comparison. The Activity timeline also shows the skip edge per band for the chosen hours.
+
+### Station balance from two-way reports (WSJT-X)
+
+In an exchange each side reports how it hears the other. Path loss and antennas are the same both ways, so the difference between the two reports is one station's *power + receiver noise* minus the other's. A least-squares fit over all two-way exchanges (one or more exchange layers, per band) gives each station a **balance**: *loud but deaf* (> +3 dB), *good ears* (< −3 dB), *balanced*, or *uncertain* (too few exchanges, or a standard error over 3 dB).
+
+It also compares **what you see with what they see**: `hears_vs_me_db` is how a station heard a signal minus how you heard the same signal (median over exchanges). The optional exchanges output has the per-exchange numbers (`report_diff_db`, `b_vs_me_db`, `a_vs_me_db`). Paths differ, so trust stations with many exchanges in different directions; this needs hours to days of decoding.
 
 ### Activity timeline
 

@@ -107,6 +107,8 @@ def exchange_fields():
 def exchange_geometry(ga, gb):
     """Great-circle MultiLineString between two grid centres."""
     (lon1, lat1), (lon2, lat2) = mh.center(ga), mh.center(gb)
+    if (lon1, lat1) == (lon2, lat2):
+        lon2 += 1e-4   # same square: a ~10 m line, as zero-length lines are invalid geometries
     parts = mh.great_circle(lon1, lat1, lon2, lat2)
     return QgsGeometry.fromMultiPolylineXY([[QgsPointXY(lon, lat) for lon, lat in p] for p in parts])
 

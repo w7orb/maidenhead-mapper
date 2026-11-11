@@ -11,14 +11,14 @@
 | 4 | ~~Hop geometry and takeoff angle~~ **done** | S–M | Medium (High with 5) | — | `hops`/`takeoff_deg` everywhere. *Check paths* adds hops at the measured height, MUF and reflection points. |
 | 5 | Ionosonde / model enrichment: **done for current data** (KC2G) | M–L | **High** | — | Left: history (PyIRI model, optional numpy dependency) so past logs can be checked.
 | 6 | Antenna A/B comparison | S (after 1) | **High** | 1 (4 for angles) | Already prototyped on your data. Practical and unusual: most hams can't measure this today. |
-| 7 | Station balance from exchanges | M | Medium | 1 helps | Least-squares fit plus confidence. Needs about 100+ exchanges per station, so value grows with data. |
+| 7 | ~~Station balance from exchanges~~ **done** | M | Medium | 1 helps | Least-squares fit plus confidence. Needs about 100+ exchanges per station, so value grows with data. |
 | 8 | ~~MUF check per path~~ **done** | S (after 5) | Medium–High | 5 | A simple comparison once MUF values exist; good at separating F2 paths from sporadic-E and scatter. |
-| 9 | Sporadic-E detector (10m/6m) | M | Medium (High for 6m, in summer) | 4, 5 help | Heuristic clustering; seasonal. |
-| 10 | Skip distance and hop structure over time | M | Medium | 3 for live data | Stats plus a chart in the timeline; shows changes, not absolute values. |
+| 9 | ~~Sporadic-E detector (10m/6m)~~ **done** | M | Medium (High for 6m, in summer) | 4, 5 help | Heuristic clustering; seasonal. |
+| 10 | ~~Skip distance and hop structure over time~~ **done** | M | Medium | 3 for live data | Stats plus a chart in the timeline; shows changes, not absolute values. |
 | 11 | Band hotter/colder than usual | M | Low–Medium | 2, regular fetches | Needs weeks of collected data before it says anything; modest accuracy (r ≈ 0.3). |
-| 12 | Menu: separate sections, ionosphere on its own | S | Medium | — | A flat list of 8 entries with 8 identical toolbar icons; group by purpose so the ionosphere tools aren't mistaken for part of WSJT-X. |
+| 12 | ~~Menu: separate sections, ionosphere on its own~~ **done** | S | Medium | — | A flat list of 8 entries with 8 identical toolbar icons; group by purpose so the ionosphere tools aren't mistaken for part of WSJT-X. |
 
-**Done 2026-11-11**: 1, 2, 3, 4, 5 (current data), 8. **Suggested next**: 6 (antenna A/B), 12 (menu sections), then 9 (sporadic-E: *above F2 MUF* paths on 10m/6m are the raw material), then 7, 10, 11 and history for 5.
+**Done**: 1, 2, 3, 4, 5 (current data), 7, 8, 9, 10, 12. **Next**: 5 (history), 6 (antenna A/B), 11 (needs weeks of data).
 
 ## Details
 

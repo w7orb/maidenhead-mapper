@@ -6,6 +6,7 @@ import os
 import time
 
 from qgis.core import (
+    QgsFeatureRequest,
     QgsApplication,
     QgsBlockingNetworkRequest,
     QgsCategorizedSymbolRenderer,
@@ -27,7 +28,6 @@ from qgis.core import (
     QgsProcessingParameterNumber,
     QgsProcessingParameterString,
     QgsRendererCategory,
-    QgsSettings,
     QgsVectorLayerSimpleLabeling,
     QgsWkbTypes,
 )
@@ -36,9 +36,10 @@ from qgis.PyQt.QtNetwork import QNetworkRequest
 
 from ..core import iono
 from ..core import maidenhead as mh
-from ..core.bands import BAND_NAMES, band_mhz
+from ..core.bands import BAND_NAMES
 from . import styling
-from .import_psk import LAYER_PROPERTY, WGS84
+from .import_psk import WGS84
+from .paths import PathError, PathReader, my_grid_for
 from .qt_compat import DATETIME, DOUBLE, INT, STRING, field, utc_qdatetime
 
 BASE_URL = "https://prop.kc2g.com"
@@ -49,7 +50,6 @@ FILES = {
     "hmf2.geojson": "/renders/current/hmf2-normal-now.geojson",
 }
 REFRESH_S = 15 * 60       # KC2G updates about every 15 minutes; don't ask more often
-SETTINGS_MYGRID = "maidenhead_mapper/mygrid"
 STATUS_COLOURS = {iono.STATUS_F2: "#2ca02c", iono.STATUS_ABOVE: "#d62728", iono.STATUS_NO_DATA: "#9e9e9e"}
 STATUS_LABELS = {iono.STATUS_F2: "F2 can support it", iono.STATUS_ABOVE: "Above F2 MUF (Es? scatter?)",
                  iono.STATUS_NO_DATA: "No ionosphere data"}
@@ -316,32 +316,20 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             self.REFLECTIONS, self.tr("Reflection points"), QgsProcessing.TypeVectorPoint,
             optional=True, createByDefault=True))
 
-    def _my_grid(self, parameters, context, source_layer):
-        g = self.parameterAsString(parameters, self.MYGRID, context).strip()
-        if not g and source_layer is not None:
-            for key, name in ((LAYER_PROPERTY, "my_grid"), ("maidenhead_mapper/log", "mygrid")):
-                try:
-                    g = json.loads(source_layer.customProperty(key) or "{}").get(name) or ""
-                except ValueError:
-                    g = ""
-                if g:
-                    break
-        return g or QgsSettings().value(SETTINGS_MYGRID, "", type=str)
-
     def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
+        # Paths are read from grid fields, not geometry: don't reject odd geometries
+        context.setInvalidGeometryCheck(QgsFeatureRequest.GeometryNoCheck)
         source = self.parameterAsSource(parameters, self.INPUT, context)
         if source is None:
             raise QgsProcessingException(self.invalidSourceError(parameters, self.INPUT))
         names = source.fields().names()
-        exchanges = "grid_a" in names and "grid_b" in names
-        if not exchanges and "grid" not in names:
-            raise QgsProcessingException(self.tr("The layer needs grid_a/grid_b (exchanges) or grid (stations)."))
-        my_grid = None
-        if not exchanges:
-            layer = self.parameterAsVectorLayer(parameters, self.INPUT, context)
-            my_grid = self._my_grid(parameters, context, layer)
-            if not mh.is_valid(my_grid or ""):
-                raise QgsProcessingException(self.tr("Enter My grid: station layers are paths from you."))
+        my_grid = my_grid_for(self.parameterAsVectorLayer(parameters, self.INPUT, context),
+                              self.parameterAsString(parameters, self.MYGRID, context))
+        try:
+            reader = PathReader(source.fields(), my_grid)
+        except PathError as exc:
+            raise QgsProcessingException(self.tr(str(exc)))
+        if not reader.exchanges:
             feedback.pushInfo(self.tr("My grid: {}").format(my_grid))
 
         if self.parameterAsBool(parameters, self.REFRESH, context) or cached_time() is None:
@@ -376,18 +364,12 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             if feedback.isCanceled():
                 break
             feedback.setProgress(100.0 * i / total)
-            if exchanges:
-                ga, gb, calls = f["grid_a"], f["grid_b"], f"{f['call_a']}–{f['call_b']}" if "call_a" in names else ""
-                bands = [f["band"]] if "band" in names and f["band"] else []
-            else:
-                ga, gb, calls = my_grid, f["grid"], f["call"] if "call" in names else ""
-                bands = [b for b in str(f["bands"] or "").split(",") if b] if "bands" in names else []
+            p = reader.read(f)
+            ga, gb, calls, freqs, when = p["ga"], p["gb"], p["calls"], p["bands"], p["when"]
             note, result, freq = "", None, None
-            freqs = [(b, band_mhz(b)) for b in bands if band_mhz(b)]
             if freqs:
                 band, freq = max(freqs, key=lambda bf: bf[1])
-            when = _when(f, names)
-            if not (isinstance(ga, str) and isinstance(gb, str) and mh.is_valid(ga) and mh.is_valid(gb)):
+            if not p["ok"]:
                 note = "no grid"
             elif freq is None:
                 note = "no band"
@@ -432,16 +414,3 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
                 source.sourceName() or "Paths", cond.time),
                                   styling.LayerStyler(lambda: _categorized("f2_status", "point")))
         return results
-
-
-def _when(f, names):
-    """A feature's last_utc as an aware datetime, or None."""
-    if "last_utc" not in names:
-        return None
-    q = f["last_utc"]
-    try:
-        if q is None or not q.isValid():
-            return None
-        return _dt.datetime.fromtimestamp(q.toSecsSinceEpoch(), _dt.timezone.utc)
-    except AttributeError:
-        return None
