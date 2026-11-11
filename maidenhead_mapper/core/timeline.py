@@ -63,3 +63,41 @@ def hourly(reports):
         else:
             out.heard[i] += 1
     return out
+
+
+@dataclass
+class WindowSummary:
+    """What a set of StationSummary rows (one time window) adds up to."""
+    heard: int = 0
+    heard_me: int = 0
+    reports: int = 0
+    bands: List[tuple] = field(default_factory=list)    # (band, stations), low to high
+    farthest: object = None                             # StationSummary or None
+    strongest: object = None
+
+
+def summarize_window(rows):
+    from .stations import _band_order  # local: stations imports nothing from here
+    out = WindowSummary()
+    counts = {}
+    for s in rows:
+        if s.direction == "heard_me":
+            out.heard_me += 1
+        else:
+            out.heard += 1
+        out.reports += s.reports
+        for b in filter(None, s.bands.split(",")):
+            counts[b] = counts.get(b, 0) + 1
+        if s.distance_km is not None and (out.farthest is None or s.distance_km > out.farthest.distance_km):
+            out.farthest = s
+        if s.snr_best is not None and (out.strongest is None or s.snr_best > out.strongest.snr_best):
+            out.strongest = s
+    out.bands = sorted(counts.items(), key=lambda kv: _band_order(kv[0]))
+    return out
+
+
+def window_label(start, end):
+    """Short legend text for a window, e.g. '11-24 08:00–20:00 UTC'."""
+    if start.date() == end.date():
+        return f"{start:%m-%d %H:%M}–{end:%H:%M} UTC"
+    return f"{start:%m-%d %H:%M} – {end:%m-%d %H:%M} UTC"

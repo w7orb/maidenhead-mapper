@@ -28,3 +28,23 @@ def test_span_and_index():
 def test_empty():
     h = timeline.hourly([])
     assert len(h) == 0 and h.reports() == 0 and h.index(T0) == 0
+
+
+def test_summarize_window():
+    from maidenhead_mapper.core.stations import StationSummary
+
+    def s(call, direction, bands, dist, snr, reports=1):
+        return StationSummary(call, "FN42", direction, reports, snr, snr, snr, bands, "FT8",
+                              T0, T0, dist, 90.0, "psk", 0.0, 0.0)
+    w = timeline.summarize_window([s("A", "heard", "20m,40m", 100.0, -5, 3), s("B", "heard_me", "20m", 9000.0, -20),
+                                   s("C", "heard", "", None, None)])
+    assert (w.heard, w.heard_me, w.reports) == (2, 1, 5)
+    assert w.bands == [("40m", 1), ("20m", 2)]
+    assert w.farthest.call == "B" and w.strongest.call == "A"
+    assert timeline.summarize_window([]).farthest is None
+
+
+def test_window_label():
+    end = T0 + dt.timedelta(hours=12)
+    assert timeline.window_label(T0, end) == "11-10 18:00 – 11-11 06:00 UTC"
+    assert timeline.window_label(T0, T0 + dt.timedelta(hours=2)) == "11-10 18:00–20:00 UTC"

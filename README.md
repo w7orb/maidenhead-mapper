@@ -54,9 +54,10 @@ Restart QGIS, then enable **Maidenhead Mapper** under *Plugins → Manage and In
 *Plugins → Maidenhead Mapper → Activity timeline* opens a panel under the map. Choose a station layer made by *Fetch* or *Import*.
 
 - Bars show reports per UTC hour: blue = stations I heard, orange = stations that heard me. Hover over a bar for its counts.
-- **Drag** across the bars to pick hours. On release, the layer's markers are rebuilt from only those reports, so counts, SNR, bands and first/last times describe that window. **Double-click** or **All hours** picks everything; **◀ ▶** step the window by its own length.
+- **Drag** across the bars to pick hours. The map updates as you drag: markers are rebuilt from only those reports, so counts, SNR, bands and first/last times describe that window. Attribute tables and labels update too, and the layer's name shows the window (e.g. *PSK Reporter stations · 11-24 08:00–20:00 UTC*).
+- Below the chart: stations heard / heard me, stations per band, and the farthest and strongest station in the window. **Double-click** or **All hours** picks everything; **◀ ▶** step the window by its own length.
 - The layer remembers its folder, filters and chosen hours, so this works again after reopening the project. If more pulls have been added to the folder, they are read in.
-- The timeline replaces the layer's features. It refuses while the layer is being edited.
+- The timeline replaces the layer's features. It refuses while the layer is being edited. Choosing a layer turns it on; other station layers above it in the list can still cover its markers.
 
 ### WSJT-X live map
 

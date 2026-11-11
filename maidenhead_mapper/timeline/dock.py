@@ -22,6 +22,7 @@ from ..core import psk, stations, timeline
 from .histogram import Histogram
 
 _FMT = "%Y-%m-%d %H:00"
+LIVE_MS = 180      # while dragging, rebuild the layer at most this often
 
 
 def _signature(folder):
@@ -54,8 +55,11 @@ class TimelineDock(QDockWidget):
         self.layers = QComboBox()
         self.layers.currentIndexChanged.connect(self._layer_changed)
         self.hist = Histogram()
-        self.hist.dragging.connect(self._describe)
-        self.hist.selected.connect(self._apply)
+        self.hist.dragging.connect(self._dragging)
+        self.hist.selected.connect(self._released)
+        self.live = QTimer(self)  # throttles rebuilds while the mouse moves
+        self.live.setSingleShot(True)
+        self.live.timeout.connect(lambda: self._apply(*self.hist.sel))
         self.info = QLabel()
         self.info.setWordWrap(True)
         self.info.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -123,6 +127,14 @@ class TimelineDock(QDockWidget):
             self.opts = None
             self._set_info("This layer's import settings are unreadable.")
             return
+        node = QgsProject.instance().layerTreeRoot().findLayer(self.layer.id())
+        if node is not None and not node.isVisible():
+            node.setItemVisibilityChecked(True)
+            parent = node.parent()
+            while parent is not None and hasattr(parent, "setItemVisibilityChecked"):
+                parent.setItemVisibilityChecked(True)
+                parent = parent.parent()
+        self.opts.setdefault("name", self._base_name(self.layer.name()))
         folder, mycall = self.opts["folder"], self.opts["mycall"]
         sig = _signature(folder)
         if sig is None:
@@ -160,21 +172,46 @@ class TimelineDock(QDockWidget):
         start, end = (psk.report_time(self.opts.get(k)) for k in ("start", "end"))
         sel = (h.index(start) if start else 0, h.index(end) if end else len(h) - 1)
         self.hist.set_data(h, sel)
-        self._describe(*sel, stations_count=self.layer.featureCount())
+        self._apply(*sel)  # also fills in the window summary
 
     # --- range ------------------------------------------------------------
-    def _describe(self, i0, i1, stations_count=None):
+    @staticmethod
+    def _base_name(name):
+        return name.split(" · ")[0]
+
+    def _dragging(self, i0, i1):
+        self._describe(i0, i1)
+        if not self.live.isActive():
+            self.live.start(LIVE_MS)
+
+    def _released(self, i0, i1):
+        self.live.stop()
+        self._apply(i0, i1)
+
+    def _describe(self, i0, i1, window=None):
         h = self.hourly
         if not h:
             return
         start, _ = h.span(i0, i1)
         hours = i1 - i0 + 1
-        txt = (f"<b>{start:{_FMT}} – {h.hour(i1 + 1):{_FMT}} UTC</b> ({hours} h)<br>"
-               f"{h.reports(i0, i1):,} report(s) of {h.reports():,}")
-        if stations_count is not None:
-            txt += f"; {stations_count:,} station marker(s)"
-        txt += "<br><small>Drag across the chart to choose hours; double-click for all.</small>"
-        self._set_info(txt)
+        lines = [f"<b>{start:{_FMT}} – {h.hour(i1 + 1):{_FMT}} UTC</b> ({hours} h): "
+                 f"{h.reports(i0, i1):,} of {h.reports():,} report(s)"]
+        if window is not None:
+            w = window
+            lines.append(f"<b>{w.heard + w.heard_me:,}</b> station(s): "
+                         f"<span style='color:#1f77b4'>{w.heard:,} heard</span>, "
+                         f"<span style='color:#ff7f0e'>{w.heard_me:,} heard me</span>")
+            if w.bands:
+                lines.append("Bands: " + ", ".join(f"{b} {n:,}" for b, n in w.bands))
+            if w.farthest is not None:
+                f = w.farthest
+                lines.append(f"Farthest: {f.call} {f.grid}, {f.distance_km:,.0f} km "
+                             f"({'heard me' if f.direction == 'heard_me' else 'heard'})")
+            if w.strongest is not None:
+                st = w.strongest
+                lines.append(f"Strongest: {st.call} {st.snr_best:+d} dB")
+        lines.append("<small>Drag across the chart to choose hours; double-click for all.</small>")
+        self._set_info("<br>".join(lines))
 
     def _apply(self, i0, i1):
         if self.layer is None or self.reports is None:
@@ -190,7 +227,10 @@ class TimelineDock(QDockWidget):
         o["start"] = None if start is None else int(start.timestamp())
         o["end"] = None if end is None else int(end.timestamp())
         self.layer.setCustomProperty(LAYER_PROPERTY, json.dumps(o))
-        self._describe(i0, i1, stations_count=len(summary))
+        base = o.get("name") or self._base_name(self.layer.name())
+        self.layer.setName(base if whole else f"{base} · {timeline.window_label(h.hour(i0), h.hour(i1 + 1))}")
+        self.layers.setItemText(self.layers.currentIndex(), self.layer.name())
+        self._describe(i0, i1, window=timeline.summarize_window(summary))
 
     def _rewrite(self, summary):
         lyr = self.layer
@@ -212,8 +252,16 @@ class TimelineDock(QDockWidget):
             for n in names:
                 f.setAttribute(n, src[n])
             feats.append(f)
-        pr.deleteFeatures(list(lyr.allFeatureIds()))
-        pr.addFeatures(feats)
+        # An edit session (not the provider directly) so attribute tables,
+        # statistics and labels hear about the change.
+        lyr.startEditing()
+        lyr.deleteFeatures(list(lyr.allFeatureIds()))
+        lyr.addFeatures(feats)
+        if not lyr.commitChanges():
+            errors = "; ".join(lyr.commitErrors())
+            lyr.rollBack()
+            self._set_info(f"Could not update the layer: {errors}")
+            return False
         lyr.updateExtents()
         lyr.triggerRepaint()
         return True
