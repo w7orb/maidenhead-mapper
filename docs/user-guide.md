@@ -344,7 +344,37 @@ ADIF layers don't appear in the Activity timeline: a log spanning years doesn't 
 
 In an exchange, each side reports how it hears the other. The path and both antennas are the same in both directions, so the **difference between the two reports** is one station's (transmit power + receiver noise) minus the other's.
 
-A fit over many exchanges gives each station a **balance**:
+#### How it works
+
+The SNR at which station B hears station A is roughly:
+
+```
+S(A→B) = A's power + A's antenna gain − path loss + B's antenna gain − B's noise level
+```
+
+The reverse report, S(B→A), has the same path loss and the same two antenna gains, because during the minute an exchange takes, the signal travels the same path both ways. Subtract one report from the other and the path and both antennas cancel:
+
+```
+      A ──────── same path, same antennas ──────── B
+      │   S(A→B): how B hears A                    │
+      │   S(B→A): how A hears B                    │
+
+S(A→B) − S(B→A) = (A's power + A's noise) − (B's power + B's noise)
+```
+
+So each exchange with both reports measures one number: how much **"louder or deafer"** A is than B. The plugin calls a station's (power + noise) its **balance**:
+
+- A high balance means a strong transmitter and/or a noisy receiver. Others hear this station better than it hears them: **loud but deaf**.
+- A low balance means a weak signal and/or a quiet receiver: **good ears**.
+
+One exchange compares two stations. Stations that work several partners link up into a network: if A is 5 dB above B and B is 3 dB above C, then A should be about 8 dB above C. The tool fits every station's balance to all the differences at once (least squares). Only differences are measured, so each connected group of stations is shifted so that its average is 0. `group_size` is how many stations are in that group. Balances can only be compared within one group and one band.
+
+Two things make the fit sturdier than a plain average:
+
+- **Robust fitting (Huber).** Fading can make one exchange 20–30 dB off. An exchange that disagrees strongly with the rest of the fit gets less weight, so one wild exchange barely moves a station's balance.
+- **Censoring.** A report at or below **−20 dB** is near the decode floor: the signal was decoded only because it faded up for that slot, so the typical level was lower. A report at or above **+15 dB** is compressed by WSJT-X's detector, so the true level was higher. Such reports are used only as limits ("at most" or "at least"), not as exact values. When an exchange's two limits point in opposite directions, the exchange carries no information and is left out. `n_censored` and `n_dropped` count these per station.
+
+`std_err_db` is the fit's estimate of how uncertain the balance is. A station is marked **uncertain** when it has fewer usable exchanges than *Exchanges needed for a verdict*, or a standard error over 3 dB.
 
 | Verdict | Balance | Meaning |
 |---|---|---|
@@ -352,8 +382,6 @@ A fit over many exchanges gives each station a **balance**:
 | balanced | −3 to +3 dB | |
 | good ears | below −3 dB | Weak signal and/or a quiet receiver. |
 | uncertain | | Too few usable exchanges, or a standard error over 3 dB. |
-
-Balances are relative: each connected group of stations is centred on 0.
 
 It also compares **what you hear with what they hear**. When you decode a signal and the station it was sent to reports it, `hears_vs_me_db` is how that station heard it minus how you did (median). Positive means they hear those signals better than you.
 
@@ -373,11 +401,53 @@ It also compares **what you hear with what they hear**. When you decode a signal
 ![Map of stations in North America, Europe and the Caribbean coloured by verdict](images/res_balance.png)
 *The 60 stations with the most two-way exchanges in one day's ALL.TXT: 25 loud but deaf (red), 17 balanced (green), 18 good ears (blue). One day is far less than the ~100 exchanges per station recommended, so read this as an illustration.*
 
-**Limits**
+#### Example
+
+These numbers are from a real run: one day (11 November 2026) of the author's ALL.TXT, imported with *Import WSJT-X ALL.TXT*.
+
+**One exchange.** On 20m, W7ASS and W8F completed an exchange. W7ASS sent W8F −15 (W7ASS heard W8F at −15 dB) and W8F sent W7ASS −8 (W8F heard W7ASS at −8 dB). In the layer that is `a_hears_b` = −15 and `b_hears_a` = −8. So:
+
+```
+S(W7ASS→W8F) − S(W8F→W7ASS) = −8 − (−15) = +7 dB
+```
+
+Taken alone, this says W7ASS is 7 dB "louder or deafer" than W8F. But in the same day's data, the two reports of one exchange differed from each other with a spread of about 9 dB (standard deviation). One exchange tells you very little.
+
+**One day on 15m.** The log held 1,000 two-way exchanges on 15m. 181 of them had a report at the floor or compressed. They linked 659 stations, 620 of them in one connected group. The median station appeared in only 2 exchanges, so most stations come out **uncertain**: 438 uncertain, 89 loud but deaf, 67 good ears, 65 balanced. The best-observed stations:
+
+| call | balance_db | n_two_way | n_censored | verdict |
+|---|---|---|---|---|
+| KH8A | −4.4 | 56 | 8 | good ears |
+| V31MA | −0.1 | 50 | 13 | balanced |
+| W5RBD | +2.2 | 31 | 9 | balanced |
+| K2PL | +8.7 | 23 | 9 | loud but deaf |
+| WM3I | −7.4 | 19 | 6 | good ears |
+
+KH8A hears its partners about 4 dB better, relative to how they hear it, than the average station in the group does.
+
+#### Reading the results
+
+1. **Start with `n_two_way`.** Ignore verdicts based on a handful of exchanges, whatever the standard error says (see *Limits*).
+2. **Then look at the size of the balance.** ±3 to ±6 dB is ordinary station-to-station variation. +10 dB or more usually means a high-power station, or one with a noisy receiving location. −10 dB or less usually means a low-power station with a quiet location and a good receive antenna.
+3. **Find your own row** (`is_me` = 1). If you come out **loud but deaf**, others hear you better than you hear them: look for local noise (QRM), or you may be running more power than most. **Good ears** means your receive side is relatively strong.
+4. **Compare bands separately.** With *Separately per band* on, each band has its own groups and centring. A station can be loud but deaf on 20m and balanced on 15m, because noise levels differ by band.
+5. **`hears_vs_me_db`** answers a different question: for the same signal, did the other station hear it better than you? A large positive value for many stations in many directions points at your receive side.
+
+#### Limits
 
 - FT8 reports are noisy. Single reports fade by up to 30 dB and the two reports come from different 15-second slots. The fit is robust (one wild exchange barely moves it), but it needs **lots of data**: averaging about 100 exchanges per station is recommended (DK3BA 2024). An hour of decoding gives a few per station.
+- **`std_err_db` is too optimistic when most stations have only one or two exchanges.** The fit estimates the scatter from how well it explains the data. A station seen once is always explained perfectly, so in sparse data the scatter estimate falls to its 1 dB minimum. In the 15m example above it came out at about 1 dB, while the real spread between well-observed stations was 6–8 dB. Until that is fixed, use a rule of thumb instead: the uncertainty is about **8 dB ÷ √n_two_way**. That is about ±2.5 dB with 10 exchanges, ±1.1 dB with 50 and ±0.8 dB with 100.
 - Reports at or below −20 dB are at the decode floor, and at or above +15 dB WSJT-X compresses them. Such reports are used only as limits, not exact values; `n_censored` and `n_dropped` count them.
+- The balance mixes power and noise. It can't tell a 1 kW station on a quiet hilltop from a 100 W station in a noisy suburb if both come out the same.
+- Propagation isn't perfectly reciprocal (polarisation and fading change within seconds), which is part of the scatter.
 - For `hears_vs_me_db`, paths differ between you and the other station. Trust stations with many exchanges in different directions.
+
+#### Try this
+
+- **Collect a week.** Save the live map's session every day, then run the tool on all of them together (*Exchange layer(s)* takes several layers). Watch `n_two_way` grow and the verdicts settle.
+- **Test a change at your station.** Run a few days, change one thing (a preamp, a noise-cancelling device, power level), run a few more days, and compare your own balance before and after. A real change should move it by several dB.
+- **Look at the exchanges.** Turn on *Exchanges with contrasts* and sort by `report_diff_db` to see the exchanges behind a surprising verdict.
+- **Day against night.** Filter the input layers by time (right-click → *Filter…* on `first_utc`) and run once for daytime and once for night-time. Noise levels, and so balances, often change.
 
 ### 7.5 Antenna A/B comparison
 
@@ -495,15 +565,45 @@ For each path in a station or exchange layer, works out whether the F2 layer cou
 | `freq_mhz` | The frequency judged: the band's FT8 frequency; a station on several bands is judged on its highest. |
 | `iono_source`, `iono_utc`, `iono_note` | Which data was used, its time, and why there was none. |
 
+#### How it works
+
+**What the MUF is.** Send a signal straight up and the F2 layer reflects it only up to a certain frequency, the **critical frequency foF2**. Send it up at a slant and the layer can bend back much higher frequencies, because the wave meets the layer at a glancing angle. The **MUF** (maximum usable frequency) of a path is the highest frequency the layer can bend back over that distance. Longer hops meet the layer at a flatter angle, so their MUF is higher, up to about 3–4 times foF2 for the longest single hop. The ionosphere maps describe this with **MUF(3000)**: the MUF for a 3,000 km hop.
+
+```
+            F2 layer (hmF2 ≈ 250–350 km)
+   ─────────────────●─────────────────
+                 ╱     ╲            short hop: steep angle, MUF ≈ 1–2 × foF2
+               ╱         ╲          long hop:  shallow angle, MUF ≈ 3–4 × foF2
+   ───────── A ─────────── B ─────────  ground
+```
+
+A band **fits** a path when its frequency is at or below the path's MUF.
+
+**Where the ionosphere numbers come from.** For each point it needs foF2, MUF(3000) and the layer height hmF2:
+
+- **KC2G** gives the measured maps for *now*. Near a current, trusted ionosonde (confidence 50 or more), the maps are nudged towards its measurements; the correction fades out over about 1,000 km. This also fills in peaks above the top contour (the MUF(3000) map stops at 28 MHz).
+- The **CCIR model** gives the *monthly median* for the path's own date and time, at the sunspot number R12 (looked up, or the one you enter).
+- **Auto** uses KC2G for paths within *Only paths within this many hours* of its data, and the model for everything older.
+
 **How the MUF is worked out** (ITU-R P.533-14):
 
-- Paths up to one hop's maximum length: at the path midpoint.
-- Longer paths: the lower of the values at two *control points*, half a hop in from each end.
+- Paths up to one hop's maximum length (at most 4,000 km): at the path midpoint.
+- Longer paths: the lower of the values at two *control points*, half a hop in from each end. A long path is only as good as its weakest end.
 - Paths over 9,000 km: P.533's long-path method.
 
 This is the **basic** MUF. P.533's *operational* MUF is typically 10–20% higher, so contacts slightly "above F2 MUF" are common, especially on long paths. Treat "above" as "worth a look", not proof of sporadic-E.
 
-Near a current, trusted ionosonde (confidence 50 or more), the KC2G maps are nudged towards its measurements; the correction fades out over about 1,000 km. This also fills in peaks above the top contour (the MUF(3000) map stops at 28 MHz).
+**Hops and reflection points.** The hop count is the **fewest hops** that cover the distance off the layer at a takeoff angle of at least 2°. One hop off a 300 km layer reaches about 3,400 km. The hops are spread evenly along the great circle; each meets the layer at a *reflection point*. The tool reads the layer height at those points, recomputes the hop count, and repeats until it settles. `takeoff_iono` is the takeoff angle for that hop count and height.
+
+**Why "above F2 MUF" doesn't mean impossible.** Real contacts above the basic MUF happen all the time:
+
+- **Sporadic-E** (see [8.3](#83-find-sporadic-e-paths)) carries short paths on 10m and 6m.
+- **Scatter and ground wave** fill in the skip zone close to you, where the F2 MUF for short hops is low.
+- The **operational MUF** is higher than the basic MUF.
+- **Model error:** the CCIR model is a monthly median and can be 20% off on a given day. KC2G maps are interpolated between ionosondes that may be thousands of kilometres from your path.
+- **Unusual paths:** chordal hops, grey-line, or a skewed path that doesn't follow the great circle.
+
+**What it doesn't check.** The MUF is only the upper limit. The tool doesn't say whether a signal is strong enough to decode, or whether absorption closes the lower bands during the day (the LUF).
 
 **Reflection points layer**: `kind` = *hop* (grey dots, where each hop meets the layer) or *control point* (diamonds where P.533 judges the MUF, green if the band fits, red if not). `path_fid` links each point to its path.
 
@@ -515,9 +615,82 @@ The output paths are coloured by `f2_status`: green F2, red above, grey no data.
 ![Green and red great-circle paths with reflection points over MUF contours](images/res_check_paths.png)
 *20 paths the F2 layer supports (green) and 20 above the F2 MUF (red), with their reflection points (grey dots = hops, diamonds = control points) over KC2G MUF(3000) contours.*
 
+#### Example
+
+These are real CCIR-model results (*Ionosphere source* = *CCIR model only*) for paths from CN85 (Oregon) at 21:00 UTC on 11 November 2026. The sunspot number was R12 = 61, from KC2G's effective sunspot number. Overhead, the model gave foF2 = 8.8 MHz, hmF2 = 263 km and MUF(3000) = 28.5 MHz.
+
+| To | Distance | hops_iono | takeoff_iono | muf_mhz | 20m (14.07) | 15m (21.07) | 10m (28.07) |
+|---|---|---|---|---|---|---|---|
+| DM79 (Colorado) | 1,602 km | 1 | 14.2° | 22.5 | F2 | F2 | above |
+| FN42 (Boston) | 4,082 km | 2 | 9.7° | 28.5 | F2 | F2 | F2 (just) |
+| PM95 (Tokyo) | 7,843 km | 3 | 5.0° | 19.8 | F2 | above | above |
+| IO91 (London) | 7,871 km | 3 | 6.4° | 9.7 | above | above | above |
+| QF56 (Sydney) | 12,323 km | 4 | 3.8° | 25.1 | F2 | F2 | above |
+
+What this shows:
+
+- **Short paths have a low MUF.** Colorado at 1,600 km is one steep hop, so 10m doesn't fit even though the overhead MUF(3000) is 28.5 MHz.
+- **A long path is limited by its weakest end.** London's MUF is only 9.7 MHz: it was 21:00 local time in Europe, and the control point near the UK had foF2 = 3.2 MHz. Tokyo's control point near Japan (6 a.m. local) had 5.7 MHz.
+- **Sydney fits 15m** at 12,300 km. Over 9,000 km the long-path method applies, and both ends were in daylight.
+
+Over the whole 21:00 hour of the same log, 342 different station-and-band paths were decoded on 15m. The model called **299 F2 and 43 above the F2 MUF**. Of the 43, 37 were under 1,430 km, inside the skip zone: local ground wave and scatter, not F2 hops. Only 6 were long paths.
+
+#### Reading the results
+
+1. **Read the counts in the log first.** Mostly F2 is normal. A good share of "above" on long paths, especially on 10m, means the band was better than the model or map expected.
+2. **Look at where the red paths are.** Red paths close to you (inside 1,000–2,000 km) are usually the skip zone being filled by scatter or ground wave, or sporadic-E on 10m and 6m. Red long paths are more interesting: an opening the model doesn't predict, grey-line, or a day when the ionosphere is above its monthly median.
+3. **Open the reflection points.** A red control-point diamond shows where the path is weakest. On east–west paths it is usually the end in darkness.
+4. **Use `bands_f2`.** For a station heard on several bands, it lists which of them F2 supports. The band judged (`freq_mhz`) is the highest one.
+
+#### Limits
+
+- The **CCIR model** is a monthly median: expect foF2 within about 20% on a given day. It doesn't know about storms, flares or sporadic-E.
+- **KC2G** has no history. *Auto* uses it only within 3 hours of its data; older paths use the model.
+- It works out the **basic** MUF; the operational MUF is typically 10–20% higher.
+- It assumes the **fewest hops** at no less than 2° takeoff. Real signals may use more hops.
+- A station on several bands is judged on its **highest** band only.
+- It judges the F2 layer only: no E layer, no absorption, no signal strength.
+
+#### Try this
+
+- **KC2G against the model.** Run it twice on your live layer, once with *KC2G only* and once with *CCIR model only*, and compare `muf_mhz`. Big differences show the day is unusual.
+- **Catch a 10m opening.** On a day 10m opens, run it on the live layer during the opening and see which paths the maps did and didn't expect.
+- **Morning against evening.** Run it on a full day's ALL.TXT import and filter the output by `last_utc`. Watch the red paths move as the night side of the Earth rotates.
+- **Chain it.** Feed the output into *Find sporadic-E paths*; it uses `f2_status` directly.
+
 ### 8.3 Find sporadic-E paths
 
 Finds paths sporadic-E most likely carried: one hop of 500–2,300 km on 12m, 10m, 6m or higher that the F2 layer can't explain.
+
+#### How it works
+
+**What sporadic-E is.** Sporadic-E (Es) is a thin, patchy layer of dense ionisation in the E region, about 100–110 km up. Patches ("clouds") form, drift and fade over minutes to hours. They can be dense enough to reflect 10m, 6m and occasionally 2m signals that the F2 layer can't. Es is strongest in the local **summer** (in the northern hemisphere roughly May to August), with a smaller peak around mid-winter. It favours **late morning and early evening** local time.
+
+**Why 500–2,300 km.** Es is low, so one hop is short. Even a signal leaving the horizon (0° takeoff) comes back down within about **2,300 km** of a 105 km layer. Closer than about 500 km the signal would have to go up very steeply, and Es rarely reflects that. Paths in this window on the higher bands are the classic Es signature. Longer Es contacts exist (two Es hops, or Es linking to F2), but the tool doesn't try to identify them.
+
+```
+       Es patch (~105 km)
+   ──────────●──────────
+           ╱   ╲            one hop: 500–2,300 km
+   ────── A ───── B ──────  ground
+```
+
+**The rules.** A path becomes a candidate when it is a single-Es-hop distance on one of the chosen bands, and:
+
+- **high** confidence: 6m and up (F2 rarely supports such short paths there), or the band is above the F2 MUF;
+- **possible**: 12m or 10m without ionosphere data.
+
+A 12m or 10m path that F2 *can* explain is not a candidate. If the input has been through *Check paths*, its `f2_status` is used. Otherwise, with *Check 12m/10m paths against the ionosphere* on, the tool checks them itself (KC2G if recent, else the CCIR model). With the CCIR model, "above F2 MUF" means above the typical MUF for that month, so treat 10m results as likely rather than certain.
+
+**How strong the patch must have been.** The signal hit the patch at a slant, so the patch's own critical frequency (**foEs**) can be much lower than the band's frequency. The secant law gives the least it can have been:
+
+```
+foEs_min = f ÷ sec(incidence angle at the layer)
+```
+
+Short paths come in steeply, so they need a denser patch. That is why 6m at 1,000 km is more remarkable than 6m at 2,000 km.
+
+**Clouds.** Candidates are placed at the path **midpoint**, where the signal met the Es layer. Candidates whose midpoints are within *Cloud: midpoints within (km)* and *Cloud: and within (minutes)* of each other are linked; linked candidates (also through a chain of neighbours) form one cloud. Clouds of two or more paths go in the clouds layer.
 
 | Setting | Default | Notes |
 |---|---|---|
@@ -529,24 +702,83 @@ Finds paths sporadic-E most likely carried: one hop of 500–2,300 km on 12m, 10
 | Cloud: midpoints within (km) | 500 | |
 | Cloud: and within (minutes) | 60 | |
 
-**Confidence**
-
-- **high**: 6m and up (F2 rarely supports such short paths there), or the band is above the F2 MUF.
-- **possible**: 12m or 10m without ionosphere data.
-
-If the input has been through *Check paths*, its `f2_status` is used. With the CCIR model, "above F2 MUF" means above the typical MUF for that month, so treat 10m results as likely rather than certain.
-
 **Outputs**
 
-- **Sporadic-E candidates**: a point at each path's midpoint (where it met the Es layer). `foes_min_mhz` is the lowest Es critical frequency that returns that band at that distance; `takeoff_es` is the takeoff angle off a 105 km layer.
+- **Sporadic-E candidates**: a point at each path's midpoint (where it met the Es layer). `foes_min_mhz` is the lowest Es critical frequency that returns that band at that distance; `takeoff_es` is the takeoff angle off a 105 km layer; `confidence` and `cloud` as above.
 - **Sporadic-E clouds**: candidates within the cloud distance and time of each other, grouped. Each has its count, bands and highest `foes_max_mhz`.
 
 ![Find sporadic-E paths dialog](images/dlg_sporadic_e.png)
 *The Find sporadic-E paths dialog. On the November evening used for these screenshots it found no candidates: sporadic-E is mostly a summer (and short mid-winter) effect, so there is no result map here.*
 
+#### Example
+
+*Illustrative numbers, computed with the plugin's formulas (no Es was found in the November log used elsewhere in this guide).*
+
+Suppose that on a June afternoon your 6m log has a station 1,000 km away, and your 10m log a station 1,500 km away. Both fall in the single-hop window, so both are candidates:
+
+| Band | Distance | confidence | takeoff_es | foes_min_mhz |
+|---|---|---|---|---|
+| 6m (50.31 MHz) | 1,000 km | high (6m) | 9.5° | 12.2 |
+| 6m (50.31 MHz) | 1,800 km | high (6m) | 2.5° | 9.3 |
+| 10m (28.07 MHz) | 1,500 km | high if *above F2 MUF*, possible without ionosphere data | 4.5° | 5.5 |
+
+The 1,000 km 6m contact needed a patch with foEs of at least 12 MHz, a strong Es event. The 1,800 km contact needed only about 9 MHz. If several such candidates have midpoints within 500 km of each other inside an hour, they form one cloud: one patch of Es, seen from several paths.
+
+#### Reading the results
+
+1. **Look at the clouds layer first.** A cloud of many paths with one midpoint area, for example over Kansas around 18 UTC in June, is one Es patch. Its `foes_max_mhz` says how dense it got.
+2. **Follow a cloud through time.** Filter candidates by `cloud` and look at `last_utc`. Es clouds often drift a few hundred kilometres per hour.
+3. **Trust 6m more than 10m.** On 6m, short paths are almost always Es. On 10m, F2 can also do 1,500–2,300 km in a strong sunspot year; there the ionosphere check is what separates the two.
+4. **Isolated "possible" points** on 10m with no ionosphere data are only hints.
+
+#### Limits
+
+- It recognises **single-hop** Es only. Double-hop Es and Es-to-F2 links (common on 6m in summer) aren't flagged.
+- It uses the **path midpoint** as the reflection point and a fixed **105 km** height.
+- `foes_min_mhz` is a **lower bound**: the patch could have been denser.
+- Paths between two other stations (in an exchange layer) count too. That's useful, because it shows Es far from you.
+- Distances come from grid squares, so a 4-character square adds up to about ±100 km.
+
+#### Try this
+
+- **Run it in summer.** Keep the live map running on 6m or 10m during June–July and run it each evening on the saved session.
+- **Compare with DX maps.** Compare your clouds with Es maps from other services for the same hour.
+- **Use a big dataset.** During a 6m opening, run *Fetch from PSK Reporter* for your own callsign or a busy 6m station's, then use the result as input. Many reporters give many midpoints, and the clouds become clearer.
+- **Chain it.** Run *Check paths* first and use its output as the input, so 10m candidates use the full ionosphere check.
+
 ### 8.4 Skip distance by hour
 
 A table, per band and UTC hour, of how far contacts reached. It shows the skip zone growing and shrinking through the day.
+
+#### How it works
+
+**What the skip zone is.** When the band's frequency is above foF2, a signal sent up steeply passes straight through the F2 layer and is lost. Only signals sent up at a shallow enough angle come back down, and those land far away. Between the end of ground-wave range (a few tens of km on HF, more with big antennas) and the first sky-wave landing point there is a **skip zone** where nothing is heard. Its outer edge is the **skip distance**.
+
+```
+             F2 layer
+   ─────────────●──────────●───────
+              ╱ │ (steep:  ╱  ╲
+            ╱   │  lost)  ╱      ╲
+   ──── you ···· skip zone ······· first sky-wave contacts ────
+        └ ground wave ┘           └ skip edge (skip_km) ┘
+```
+
+As foF2 rises (morning), the layer bends back steeper signals and the skip zone shrinks. As foF2 falls (evening), the skip zone grows, until the band closes.
+
+**Why the 10th percentile.** The tool doesn't use the single closest contact as the skip edge. One scatter, sporadic-E or ground-wave contact inside the skip zone would set it far too short. It sorts the hour's sky-wave contacts (everything over 300 km) by distance and takes the distance that 10% of them are closer than (`skip_km`). A few odd contacts barely move it. Contacts under 300 km are counted separately in `n_local`. With fewer than 20 sky-wave contacts in an hour, no skip edge is given.
+
+**From skip edge to foF2.** At the skip edge the signal meets the layer at the steepest angle that still comes back. There the band's frequency is just the layer's MUF for that hop length. Turned around, this gives an estimate of foF2 (the secant law, with the layer at 300 km):
+
+```
+fof2_est = f ÷ sec(incidence angle at the layer for a hop of skip_km)
+```
+
+It is only given when the edge is within one hop (about 3,400 km); further out, the edge is the band closing, not a skip zone. The two foF2 values to compare it with are both at **your** location:
+
+- `ccir_fof2_mhz`: the CCIR monthly median for that hour (at half past);
+- `kc2g_fof2_mhz`: KC2G's measured map, when its data is within 3 hours.
+
+The reflection point at the skip edge is half the skip distance away, so the three values describe slightly different places.
 
 **Input**: any of these:
 
@@ -572,6 +804,49 @@ Plot the table with the DataPlotly plugin, or look at it in the Activity timelin
 
 ![Table of band, hour, contact counts, skip edge, distances and foF2 values](images/res_skip_table.png)
 *Skip distance by hour for one day's ALL.TXT. The 12m hour has only 3 contacts, too few for a skip edge.*
+
+#### Example
+
+These are real values from one afternoon of 15m decodes in CN85 (Oregon) on 11 November 2026 (an ALL.TXT import; sunspot number R12 = 61). Local time is UTC − 8.
+
+| hour_utc | n_sky | n_local | skip_km | median_km | fof2_est_mhz | ccir_fof2_mhz |
+|---|---|---|---|---|---|---|
+| 19:00 | 1,180 | 0 | 1,658 | 3,404 | 8.3 | 8.6 |
+| 20:00 | 5,667 | 26 | 1,429 | 3,361 | 9.1 | 8.8 |
+| 21:00 | 5,305 | 70 | 2,022 | 3,503 | 7.4 | 8.7 |
+| 22:00 | 5,495 | 104 | 2,081 | 3,867 | 7.3 | 8.5 |
+| 23:00 | 4,612 | 124 | 1,676 | 6,876 | 8.2 | 8.1 |
+| 00:00 | 1,776 | 19 | 2,307 | 7,343 | 7.0 | 7.2 |
+
+What this shows:
+
+- **The skip edge** was shortest around local noon (20:00 UTC, 1,429 km) and moved out towards evening (2,307 km at 00:00 UTC, 4 p.m. local).
+- **The estimate tracks the model** to within about 1.3 MHz, and on most hours much closer. It ran below the median at 21–22 UTC, which may mean the ionosphere was a little below its monthly median that afternoon, or may be noise in the estimate.
+- **The median distance jumped** after 23:00 UTC, from about 3,900 km to 6,900 km. Long paths to Asia and the Pacific were opening as the nearer paths faded.
+
+Checking one row by hand: 20:00 UTC, skip edge 1,429 km on 15m (21.074 MHz). A hop of 1,429 km off a 300 km layer meets it at an incidence where sec ≈ 2.32, so foF2 ≈ 21.074 ÷ 2.32 ≈ 9.1 MHz.
+
+#### Reading the results
+
+1. **Look at `skip_km` over the hours, band by band.** The shape matters more than any single value: a short skip at midday, growing towards evening, is a normal day.
+2. **Compare bands in the same hour.** Higher bands have a longer skip edge. If 10m shows no skip edge at all while 15m does, 10m is closed or nearly so.
+3. **Compare `fof2_est_mhz` with `ccir_fof2_mhz` and `kc2g_fof2_mhz`.** Within about 1 MHz is ordinary. An estimate well above the median for several hours suggests an enhanced day; well below suggests a depressed one, for example after a geomagnetic storm.
+4. **Sudden jumps from one hour to the next** in `skip_km` can be real. Travelling ionospheric disturbances (TIDs) move the skip edge in and out over an hour or two. But first check `n_sky`: a thin hour is easily skewed.
+
+#### Limits
+
+- The foF2 estimate assumes a **fixed 300 km** layer. Each 50 km of error in that height changes the estimate by roughly 10–15%. No published work validates absolute foF2 from amateur spots; treat `fof2_est_mhz` as an indicator for comparing hours, not a measurement.
+- It needs **20 or more** sky-wave contacts in the hour for a skip edge.
+- The skip edge depends on **who is on the air**. If there are few stations at 1,000–2,000 km from you (over an ocean, say), the edge comes out too far.
+- **Sporadic-E, scatter and ground-wave** contacts inside the skip zone pull the 10th percentile in; the percentile limits this but doesn't remove it.
+- With **ADIF or station layers**, each QSO or station counts once, so the hours hold far fewer samples than a decode log.
+
+#### Try this
+
+- **Follow a day.** Run the live map for a full day on one band, then run this tool on the saved session and plot `skip_km` against `hour_utc` with DataPlotly.
+- **Compare two days.** Run it on a quiet day and on a day after a geomagnetic storm (check the Kp index), and compare the skip edges.
+- **Compare bands.** Switch between 20m and 15m every hour during an afternoon to see how the skip edge depends on frequency.
+- **Use the timeline.** Select a few hours in the Activity timeline; it shows the skip edge per band for just those hours.
 
 ## 9. Activity timeline
 
