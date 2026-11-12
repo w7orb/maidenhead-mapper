@@ -114,10 +114,10 @@ Two sources, chosen per path (*Ionosphere source*; `iono_source` records which w
     - over 9,000 km: the long-path method (§5.3.1, eqs. 29–30).
 
     This is the *basic* MUF. P.533's operational MUF is higher, by 10–20% or more, so contacts slightly above it are common, especially on long paths;
-  - `f2_status`: **F2** (the band is at or below the MUF), **above F2 MUF** (not explained by simple F2 hops: sporadic-E, scatter, long path, or the map is off), or **no data**;
+  - `f2_status`: **F2** (the band is at or below the MUF), **above basic MUF** (not explained by simple F2 hops: sporadic-E, scatter, long path, or the map is off), or **no data**;
   - `bands_f2`: which of the path's bands F2 supports;
   - `hops_muf`: the hop count the MUF is computed with (P.533: hops of at most 4,000 km at 3° or more; it can be one more than `hops_iono`, which allows 2°). More hops never raise the basic MUF, so a path above it at the fewest hops is above it at any count;
-  - `mode_guess`: **Es** where sporadic-E is the likely explanation (6m and up at single-Es-hop range, or 12m/10m there above the F2 MUF), else **F2**, **above MUF** or **no data**.
+  - `mode_guess`: **Es** where sporadic-E is the likely explanation (6m and up at single-Es-hop range, or 12m/10m there above the F2 MUF), else **F2**, **above basic MUF** or **no data**.
 
   Tick *Also write the results into the input layer* to add these fields to the input layer itself (memory or GeoPackage, e.g. a saved session) as well as the output layer. It's skipped with a warning if the layer is being edited or can't be changed. Exchanges that arrive later, or a timeline rebuild, leave the fields empty; run it again to refill.
   With *Auto*, recent paths use KC2G and older ones the CCIR model. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, with `kind` *hop* (where each hop meets the layer; grey dots) and *control point* (where P.533 judges the MUF, coloured by whether the band fits).
@@ -149,7 +149,7 @@ It also compares **what you see with what they see**: `hears_vs_me_db` is how a 
 
 ### Summarize exchanges by grid pair (WSJT-X)
 
-Many exchange lines become one **corridor** per pair of grid cells (field, 2×2 squares or square) and band: the number of exchanges and distinct stations at each end, the median SNR each way (`a_to_b_db`, `b_to_a_db`), the median two-way difference (`diff_db`), the hours it was active, and the F2/Es/above-MUF counts if the input went through *Check paths*. Line width shows traffic, colour the median SNR. Station balance rows now also carry partners, median and farthest distance, bands, and the median report each way (`heard_db`, `hears_db`).
+Many exchange lines become one **corridor** per pair of grid cells (field, 2×2 squares or square) and band: the number of exchanges and distinct stations at each end, the median SNR each way (`a_to_b_db`, `b_to_a_db`), the median two-way difference (`diff_db`), the hours it was active, and the F2/Es/above-basic-MUF counts if the input went through *Check paths*. Line width shows traffic, colour the median SNR. Station balance rows now also carry partners, median and farthest distance, bands, and the median report each way (`heard_db`, `hears_db`).
 
 ### Propagation over time (WSJT-X)
 
@@ -171,7 +171,7 @@ Below the decode floor the weaker antenna reports nothing rather than a low SNR,
 
 ### Export research dataset (WSJT-X)
 
-Writes ALL.TXT decodes as a CSV with one row per observed SNR, for merging with other operators' data and sharing (e.g. HamSCI, Zenodo): the reports stations sent each other in exchanges and your own decodes, linked by `exchange_id`, with distance, bearing, fewest hops, control points, day/night there and a censored flag. Callsigns are kept as sent on the air; pseudonymising them (salted SHA-256) is an option, off by default. A `.schema.json` next to the CSV describes every field; see [docs/research-export-schema.md](docs/research-export-schema.md).
+Writes ALL.TXT decodes as a CSV with one row per observed SNR, for merging with other operators' data and sharing (e.g. HamSCI, Zenodo): the reports stations sent each other in exchanges and your own decodes, linked by `exchange_id`, with distance, bearing, fewest hops, control points, day/night there and a censored flag. Schema 1.1 (v0.15.0) adds the path's basic MUF at that time from the CCIR monthly-median model (as *Check paths* computes it), f/MUF, the sporadic-E detector's flag, and `not_decoded` rows for answers a station evidently missed (it sent the same message again right after them). Callsigns are kept as sent on the air; pseudonymising them (salted SHA-256) is an option, off by default. A `.schema.json` next to the CSV describes every field; see [docs/research-export-schema.md](docs/research-export-schema.md).
 
 ### Activity timeline
 
@@ -257,7 +257,7 @@ python -m pytest
 
 Runs with any Python 3.8+ that has pytest installed; QGIS is not needed. The plugin itself uses only the Python standard library and QGIS.
 
-A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance, Propagation over time (including the time-enabled layers and the panel) and research export tools work on a small synthetic `ALL.TXT`, and that *Predict paths with VOACAP* gives its clear error without VOACAP (and runs, when VOACAP is installed). It runs in QGIS's own Python, so nothing is installed there:
+A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance, Check paths (CCIR model), Propagation over time (including the time-enabled layers and the panel) and research export tools work on a small synthetic `ALL.TXT`, that the Activity timeline keeps working after a layer is added, and that *Predict paths with VOACAP* gives its clear error without VOACAP (and runs, when VOACAP is installed). It runs in QGIS's own Python, so nothing is installed there:
 
 ```
 "C:\Program Files\QGIS 3.44.2\bin\python-qgis.bat" tests\qgis_smoke.py

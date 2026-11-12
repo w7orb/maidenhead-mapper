@@ -57,7 +57,16 @@ def test_mode_counts():
           rec("A", "FN31", "B", "EM78", f2_status="above F2 MUF"),
           rec("A", "FN31", "B", "EM78", f2_status="F2", mode_guess="F2")]
     (c,) = cor.summarize(rs).corridors
-    assert dict(c.status) == {"Es": 1, "above MUF": 1, "F2": 1}
+    assert dict(c.status) == {"Es": 1, "above basic MUF": 1, "F2": 1}
+
+
+def test_mode_counts_read_old_status_values():
+    # layers written by <= 0.14 say "above F2 MUF" / "above MUF": counted as above basic MUF
+    rs = [rec("A", "FN31", "B", "EM78", f2_status="above F2 MUF"),
+          rec("A", "FN31", "B", "EM78", f2_status="above F2 MUF", mode_guess="above MUF"),
+          rec("A", "FN31", "B", "EM78", f2_status="above basic MUF", mode_guess="above basic MUF")]
+    (c,) = cor.summarize(rs).corridors
+    assert dict(c.status) == {cor.MODE_ABOVE: 3} and cor.MODE_ABOVE == "above basic MUF"
 
 
 def test_station_facts():

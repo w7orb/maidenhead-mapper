@@ -17,12 +17,12 @@
 | 10 | ~~Skip distance and hop structure over time~~ **done** | M | Medium | 3 for live data | Stats plus a chart in the timeline; shows changes, not absolute values. |
 | 11 | Band hotter/colder than usual | M | Low–Medium | 2, regular fetches | Needs weeks of collected data before it says anything; modest accuracy (r ≈ 0.3). |
 | 12 | ~~Menu: separate sections, ionosphere on its own~~ **done** | S | Medium | — | A flat list of 8 entries with 8 identical toolbar icons; group by purpose so the ionosphere tools aren't mistaken for part of WSJT-X. |
-| 13 | Propagation model from triangle data (step 1, dataset export, **done**) | S (dataset) + M–L (model) | **High** (research value) | 1, 2, 5; weeks of sessions | Separates station effects from path effects; physics features (f/MUF, hops, day/night) plus per-station terms, censoring-aware; must beat distance-only and MUF-only baselines on held-out days. |
+| 13 | Propagation model from triangle data (step 1, dataset export, **done**, completed in 0.15.0) | S (dataset) + M–L (model) | **High** (research value) | 1, 2, 5; weeks of sessions | Separates station effects from path effects; physics features (f/MUF, hops, day/night) plus per-station terms, censoring-aware; must beat distance-only and MUF-only baselines on held-out days. |
 | 14 | Antenna pattern from neighbouring receivers | M | **High** | a PSK Reporter grid query (unverified) | Your RX/TX pattern from ordinary operating, using nearby spotters (or common receivers) as the shared-path reference. |
 | 15 | Elevation pattern from A/B data: mixture fit over hop counts | M–L (research-grade) | **High** (research value) | 5, 6; days of two-receiver data across day and night | Layer height swings day/night, so one distance is heard at several angles; a fit that treats each decode as a mix of hop counts can separate gain vs elevation from distance. |
 | 16 | ~~Reference-antenna mode for A/B~~ **done** | S–M | Medium–High | 6 | Load a NEC-modelled pattern (CSV of gain vs azimuth/elevation) for antenna B; A's results then come out as an absolute pattern in dBi. |
 | 17 | ~~Import ADIF logs~~ **done** | S | Medium–High | — | Maps your whole logging history (WSJT-X, LoTW, any logger), merges confirmations, and feeds Check paths / Station balance. |
-| 18 | Basic vs operational MUF in Check paths | S | Medium | 5, 8 | Decision pending. P.533's operational MUF is a bit higher than the basic MUF Check paths uses, so fewer long 10m paths would show as "above". Option: add the operational factors, or rename the status "above basic MUF". |
+| 18 | ~~Basic vs operational MUF in Check paths~~ **done** | S | Medium | 5, 8 | Renamed; compare with VOACAP's operational MUF under 26. The status is now "above basic MUF" (`f2_status` and `mode_guess`, v0.15.0); layers with the old "above F2 MUF" / "above MUF" are still read. |
 | 19 | Live hop estimates from the ionosphere | M | Medium | 5 | The live map fills `hops_iono`/`takeoff_iono` as each exchange arrives, from the cached KC2G data (refreshed every 15 min), instead of only the fixed-300 km estimate. |
 | 20 | ~~Fix: Station balance help text cut off~~ **done** | S | Low | — | The "<" in "< −3 dB" is read as formatting by QGIS, which hides the rest of the line after "good ears (". |
 | 21 | ~~Fix: Skip distance distances unrounded~~ **done** | S | Low | — | `median_km`/`p90_km` show many decimals in hours with too few contacts for a skip edge. |
@@ -32,21 +32,20 @@
 | 25 | ~~Propagation over time with the time slider~~ **done** | M | High | — | Index ALL.TXT, pick dates, group by hour/day, time-enabled corridor and cell layers for the Temporal Controller. Possible next: the same from saved live sessions and PSK Reporter pulls; include my own decodes (their area → mine). |
 | 26 | Predicted vs observed (VOACAP) (step 1, paths, **done**) | M (paths) + M (coverage maps) | **High** (community value) | 18 helps; VOACAP installed by the user | Add VOACAP's monthly-median REL, SNR, MUF and mode to observed corridors and exchanges, and report the gap from what was heard. Few such comparisons exist (3Y0K: VOACAP −11.3 dB bias vs RBN). Later: coverage maps from my station under observed spots. |
 
-**Done**: 1–10, 12, 16, 17, 20–25, step 1 of 13 (research export) and step 1 of 26 (VOACAP for paths). **Open**: 11 (needs weeks of data), 13 steps 2–3 (propagation model), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 18 (decision pending: basic vs operational MUF), 19 (live hop estimates), 26 step 2 (VOACAP coverage maps).
+**Done**: 1–10, 12, 16–18, 20–25, step 1 of 13 (research export, with f/MUF, Es flag and not_decoded rows since 0.15.0) and step 1 of 26 (VOACAP for paths). **Open**: 11 (needs weeks of data), 13 steps 2–3 (propagation model), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 19 (live hop estimates), 26 step 2 (VOACAP coverage maps).
 
 ## Next up (suggested order)
 
-1. **18**: decide basic vs operational MUF (suggestion: rename the status "above basic MUF" now; revisit with 26).
-2. **GitHub**: private vulnerability reporting, secret scanning, CodeQL; a tests workflow; a v0.12.0 release.
-3. **Check the research export** on an evening with your own QSOs (reports you sent should appear as `exchange_report` rows with rx = you).
-4. **13 remainder for the export**: f/MUF per row, an Es flag, rows for missed decodes.
-5. **26 follow-up**: run *Predict paths with VOACAP* on several weeks of corridors over time (one band at a time) and look at the gap by distance, hour and direction; then decide 18 against VOACAP's MUF.
-6. **Propagation over time** from saved live sessions and PSK Reporter pulls (follow-up to 25).
-7. **19**: live hop estimates.
-8. **Corridors in the Activity timeline** (follow-up to 24).
-9. Later / research: distance-vs-time charts with flare overlay and LSTID detection (may fit prop-archive better), 26 step 2 (coverage maps), 13 steps 2–3, 14, 15, 11, campaign mode for the 2 August 2027 eclipse.
+1. **Check the research export** on an evening with your own QSOs (reports you sent should appear as `exchange_report` rows with rx = you).
+2. **26 follow-up**: run *Predict paths with VOACAP* on several weeks of corridors over time (one band at a time) and look at the gap by distance, hour and direction; compare VOACAP's operational MUF with Check paths' basic MUF (follow-up to 18).
+3. **prop-archive**: update to research export schema 1.1 (re-copy research_export, ccir, iono and es from the plugin).
+4. **Propagation over time** from saved live sessions and PSK Reporter pulls (follow-up to 25).
+5. **19**: live hop estimates.
+6. **Corridors in the Activity timeline** (follow-up to 24).
+7. **A/B**: a setting for a fixed offset between the two receivers (follow-up to 16).
+8. Later / research: distance-vs-time charts with flare overlay and LSTID detection (may fit prop-archive better), 26 step 2 (coverage maps), 13 steps 2–3, 14, 15, 11, campaign mode for the 2 August 2027 eclipse.
 
-Long-term capture and analysis outside QGIS lives in the separate prop-archive project (`d:\projects\gis\prop-archive`), which uses the same research export schema.
+Long-term capture and analysis outside QGIS lives in the separate prop-archive project (`d:\projects\gis\prop-archive`), which uses the same research export schema (it needs updating to schema 1.1).
 
 ## Details
 
@@ -76,7 +75,7 @@ Long-term capture and analysis outside QGIS lives in the separate prop-archive p
 
     Design rule: the ionosphere tools stay independent of the WSJT-X live panel. They take any station or exchange layer as input, and the live panel gets no ionosphere options of its own. Also give the toolbar one drop-down button (or distinct icons) instead of 8 identical ones. The Processing Toolbox groups already match: Stations / Ionosphere.
 13. **Propagation model from triangle data**: each overheard exchange gives A→B, B→A, A→me and B→me. The reciprocal pair cancels the path; the same transmitter at two receivers cancels the transmitter. Over many exchanges this separates station effects from path loss, which spot data alone can't.
-    - ~~Step 1 (S)~~ **done** (v0.12.0, *Export research dataset*; schema in `docs/research-export-schema.md`): export a modelling dataset, one row per observed SNR (station ids, band, time, distance, hops, f/MUF, day/night at control points, Es flag, censored, decoded or not). Repeats and stalled exchanges are evidence of non-decodes. *Done:* one CSV row per observed SNR (exchange reports and my decodes, linked by `exchange_id`), distance, bearing, fewest hops, control points, day/night there, censored, optional pseudonymised callsigns (off by default), and a `.schema.json`. *Left:* f/MUF (needs the CCIR or KC2G MUF per row), an Es flag, and explicit non-decode rows.
+    - ~~Step 1 (S)~~ **done** (v0.12.0, *Export research dataset*; schema in `docs/research-export-schema.md`): export a modelling dataset, one row per observed SNR (station ids, band, time, distance, hops, f/MUF, day/night at control points, Es flag, censored, decoded or not). Repeats and stalled exchanges are evidence of non-decodes. *Done:* one CSV row per observed SNR (exchange reports and my decodes, linked by `exchange_id`), distance, bearing, fewest hops, control points, day/night there, censored, optional pseudonymised callsigns (off by default), and a `.schema.json`. *Completed (v0.15.0, schema 1.1):* `muf_basic_mhz` per row from the CCIR model at the row's time (Check paths' CCIR method; KC2G only has "now"), `f_over_muf`, `es_candidate` (the Es detector's high-confidence rule) with `foes_min_mhz`, and `not_decoded` rows (S's message, T's answer in the next slot, S's identical message in the slot after; S never the observer). Step 1 is complete. *Not done:* stalled exchanges as non-decode evidence (too ambiguous: the other station may have stopped or moved on); KC2G-based MUF for current exports. Steps 2–3 (the model) are open.
     - Step 2 (M–L): fit SNR = T_tx + R_rx − L(features) with censoring (Tobit) by alternating least squares, pure Python. Later: per-direction station terms for very active stations (other stations' antennas).
     - Step 3: validate on held-out days against distance-only and P.533-MUF baselines before calling it better.
 14. **Antenna pattern from neighbouring receivers**: antenna gain cancels in two-way differences, so antennas need a shared path with different antennas.

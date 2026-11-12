@@ -5,9 +5,10 @@
 or through pytest with MM_QGIS_PYTHON set to that launcher (tests/test_qgis_smoke.py).
 Checks that the plugin imports, every Processing algorithm builds, and the
 ALL.TXT tools, corridor summaries, station balance, Propagation over time
-(algorithm, temporal layers and panel), the research export and the antenna
-A/B comparison with a reference pattern work on a
-small synthetic ALL.TXT.
+(algorithm, temporal layers and panel), Check paths (CCIR model, the
+"above basic MUF" status), the research export (schema 1.1: MUF, Es flag,
+not_decoded rows) and the antenna A/B comparison with a reference pattern
+work on a small synthetic ALL.TXT.
 Exits 0 and prints OK on success.
 """
 
@@ -114,6 +115,34 @@ def main():
         assert rows["K1ABC"]["partners"] == 2, rows["K1ABC"]["partners"]
         assert rows["K1ABC"]["farthest"] == "JA1AAA"
     check("station balance", balance)
+
+    def check_paths():
+        from maidenhead_mapper.algorithms import ionosphere as io
+        from maidenhead_mapper.core import iono
+        assert iono.STATUS_ABOVE == "above basic MUF"
+        r = processing.run("maidenhead:check_paths", {"INPUT": out["ex"], "SOURCE": io.MODE_MODEL, "R12": 100,
+                                                       "REFRESH": False, "OUTPUT": "memory:",
+                                                       "REFLECTIONS": "memory:"}, context=ctx)
+        lyr = layer(r["OUTPUT"])
+        status = [f["f2_status"] for f in lyr.getFeatures()]
+        assert len(status) == 3 and set(status) <= {"F2", "above basic MUF", "no data"}, status
+        assert "no data" not in status, status
+        guesses = {f["mode_guess"] for f in lyr.getFeatures()}
+        assert guesses <= {"F2", "Es", "above basic MUF", "no data"}, guesses
+        renderer = io._categorized("f2_status", "line")       # keep the renderers alive while reading them
+        cats = {c.value(): c.label() for c in renderer.categories()}
+        assert cats["above basic MUF"] == "Above basic MUF (Es? scatter?)" and "above F2 MUF" not in cats
+        rules = io._reflection_renderer()
+        labels = [rule.label() for rule in rules.rootRule().children()]
+        assert "Control point: above basic MUF" in labels, labels
+        # corridors count the new status (and read old layers' values too: unit tests)
+        r = processing.run("maidenhead:summarize_exchanges", {"INPUT": [lyr], "SIZE": 0, "MIN_N": 1,
+                                                               "OUTPUT": "memory:"}, context=ctx)
+        n_above = sum(f["n_above_muf"] for f in layer(r["OUTPUT"]).getFeatures())
+        assert n_above == sum(g in ("above basic MUF",) for g in
+                              (f["mode_guess"] for f in lyr.getFeatures())), n_above
+        out["check"] = status
+    check("check paths (CCIR model, above basic MUF)", check_paths)
 
     def over_time():
         r = processing.run("maidenhead:corridors_over_time", {"FILES": [path], "BIN": 0, "SIZE": 0,
@@ -246,25 +275,47 @@ def main():
         from maidenhead_mapper.core import research_export as rx
         dest = os.path.join(tmp, "research.csv")
         r = processing.run("maidenhead:research_export", {"FILES": [path], "MYCALL": "N0CALL", "MYGRID": "CN85",
-                                                           "OUTPUT": dest}, context=ctx)
+                                                           "R12": 100, "OUTPUT": dest}, context=ctx)
         assert r["OUTPUT"] == dest and r["ROWS"] == 17, r
         with open(dest, encoding="utf-8", newline="") as f:
             rows = list(csv.DictReader(f))
         assert len(rows) == 17 and list(rows[0]) == rx.COLUMNS, list(rows[0])
+        assert rx.SCHEMA_VERSION == "1.1" and rx.COLUMNS[:len(rx.COLUMNS_1_0)] == rx.COLUMNS_1_0
+        assert rx.COLUMNS[len(rx.COLUMNS_1_0):] == ["muf_basic_mhz", "f_over_muf", "es_candidate", "foes_min_mhz"]
         kinds = [x["report_kind"] for x in rows]
         assert (kinds.count("exchange_report"), kinds.count("my_decode")) == (5, 12), kinds
+        placed = [x for x in rows if x["distance_km"]]
+        assert len(placed) == 16 and all(float(x["muf_basic_mhz"]) > 1 for x in placed)
+        for x in placed:
+            assert abs(float(x["f_over_muf"]) - float(x["freq_mhz"]) / float(x["muf_basic_mhz"])) < 0.002, x
+            assert x["es_candidate"] == "0"          # 20m / 15m: never Es by the detector's rule
         with open(r["SCHEMA"], encoding="utf-8") as f:
             doc = json.load(f)
         assert r["SCHEMA"] == os.path.join(tmp, "research.schema.json")
         assert doc["row_counts"]["total"] == 17 and doc["pseudonymised"] is False and doc["plugin_version"]
+        assert doc["schema_version"] == "1.1" and doc["row_counts"]["with_muf"] == 16
+        assert doc["muf_model"]["r12_used"] == {"CCIR median, R12 100 (given)": 16}, doc["muf_model"]
         dest2 = os.path.join(tmp, "research_20m.csv")
         r = processing.run("maidenhead:research_export", {"FILES": [path], "MYCALL": "N0CALL", "MYGRID": "CN85",
                                                            "BAND": "20m", "PSEUDONYMISE": True, "SALT": "x",
-                                                           "OUTPUT": dest2}, context=ctx)
+                                                           "MUF": False, "OUTPUT": dest2}, context=ctx)
         assert r["ROWS"] == 7, r
         with open(dest2, encoding="utf-8") as f:
             text = f.read()
         assert "K1ABC" not in text and "N0CALL" not in text and "FN31" in text
+        with open(dest2, encoding="utf-8", newline="") as f:
+            assert {x["muf_basic_mhz"] for x in csv.DictReader(f)} == {""}
+        # exchanges with repeated messages give not_decoded rows
+        path_rep = sample.write(os.path.join(tmp, "ALL_REPEATS.TXT"), repeats=True)
+        dest3 = os.path.join(tmp, "research_rep.csv")
+        r = processing.run("maidenhead:research_export", {"FILES": [path_rep], "MYCALL": "N0CALL",
+                                                           "MYGRID": "CN85", "R12": 100, "OUTPUT": dest3},
+                           context=ctx)
+        with open(dest3, encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f))
+        nd = [x for x in rows if x["report_kind"] == "not_decoded"]
+        assert len(nd) == 3 and {(x["snr_db"], x["censored"], x["n_decoded"]) for x in nd} == {("", "1", "0")}, nd
+        assert {x["rx_call"] for x in nd} == {"W5GHI", "W6MNO"}
     check("research export", research_export)
 
     def antenna_reference():

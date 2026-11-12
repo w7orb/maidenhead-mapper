@@ -70,7 +70,20 @@ FD_COEFFS = (29.1996868566837e-6, 87.4376851991085e-9, 22.0776941764705e-12, 102
 DIPOLE_NT = 29806.0            # IGRF-13 (2020) dipole field at the equator, Earth's surface
 GYRO_MHZ_PER_NT = 27.992e-6    # electron gyrofrequency e B / (2 pi m)
 DEFAULT_R12 = 100.0            # for foE when the conditions don't say
-STATUS_F2, STATUS_ABOVE, STATUS_NO_DATA = "F2", "above F2 MUF", "no data"
+STATUS_F2, STATUS_ABOVE, STATUS_NO_DATA = "F2", "above basic MUF", "no data"
+# Older plugin versions (<= 0.14) wrote these for the same status (f2_status / mode_guess).
+LEGACY_ABOVE = ("above F2 MUF", "above MUF")
+
+
+def normalize_status(status):
+    """f2_status / mode_guess as read back from a layer: old "above F2 MUF" /
+    "above MUF" values become STATUS_ABOVE, anything else is returned unchanged."""
+    return STATUS_ABOVE if status in LEGACY_ABOVE else status
+
+
+def status_for(freq_mhz, muf_mhz):
+    """F2 if the frequency is at or below the path's basic MUF, else above it."""
+    return STATUS_F2 if freq_mhz <= muf_mhz else STATUS_ABOVE
 
 
 # ------------------------------------------------------------------ ionosondes
@@ -394,7 +407,7 @@ def analyse_path(lon1, lat1, lon2, lat2, freq_mhz, cond: Conditions,
         return PathIono(STATUS_NO_DATA, n, takeoff)
     rows, n_muf = cp
     muf = min(r[5] for r in rows)
-    return PathIono(STATUS_F2 if freq_mhz <= muf else STATUS_ABOVE, n, takeoff,
+    return PathIono(status_for(freq_mhz, muf), n, takeoff,
                     round(sum(r[3] for r in rows) / len(rows), 1), round(min(r[2] for r in rows), 2),
                     round(muf, 2), rows, n_muf)
 

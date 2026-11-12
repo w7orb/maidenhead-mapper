@@ -70,7 +70,7 @@ DIST_EDGES = (0, 1000, 2000, 4000, 6000, 8000, 10000, 13000, 20100)
 TAKEOFF_EDGES = (0, 3, 6, 10, 15, 25, 90)
 ES_BIN = "Es (~105 km)"
 GEOMETRIC, KC2G, MODEL = "geometric", "KC2G", "model"
-MODE_F2, MODE_ABOVE, MODE_ES = "F2", "above MUF", "Es"
+MODE_F2, MODE_ABOVE, MODE_ES = _es.MODE_F2, _es.MODE_ABOVE, _es.MODE_ES   # "F2", "above basic MUF", "Es"
 COMPASS = ("N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW")
 
 
@@ -217,7 +217,7 @@ class Angle:
     takeoff_deg: Optional[float]
     hops: Optional[int]
     method: str = GEOMETRIC           # geometric / KC2G / model
-    mode: str = MODE_F2               # F2 / above MUF / Es
+    mode: str = MODE_F2               # F2 / above basic MUF / Es
     hmf2_km: Optional[float] = None
     muf_mhz: Optional[float] = None
 

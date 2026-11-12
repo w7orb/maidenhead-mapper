@@ -21,7 +21,10 @@ These are *monthly medians*: typical conditions for that month, time and
 solar activity, not that day's weather (day-to-day foF2 varies ~20%).
 """
 
+import datetime as _dt
+import json
 import math
+import os
 import re
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
@@ -256,3 +259,77 @@ def r12_for(when, smoothed=None, monthly=None, essn=None):
     if monthly and key in monthly:
         return monthly[key], "SILSO monthly"
     return None, ""
+
+
+# ------------------------------------------------------------- model source
+STEP_MINUTES = 15          # model times are rounded down to this
+
+
+def file_name(month):
+    """IRI's coefficient file for a month (1..12): ccir11.asc .. ccir22.asc."""
+    return f"ccir{month + 10}.asc"
+
+
+def load_dir(path) -> "Model":
+    """The model from a folder holding ccir11.asc .. ccir22.asc (as the plugin caches them)."""
+    months = {}
+    for m in range(1, 13):
+        with open(os.path.join(path, file_name(m)), encoding="ascii", errors="replace") as f:
+            months[m] = parse(f.read())
+    return Model(months)
+
+
+class ModelSource:
+    """The CCIR model for any time, the way Check paths' CCIR option uses it.
+
+    conditions(when) -> (conditions or None, label, note): the time is
+    rounded down to STEP_MINUTES, R12 is the given one or looked up with
+    r12_for() (SILSO smoothed, KC2G effective, SILSO monthly), and the
+    conditions are cached per (time, rounded R12). Each conditions object
+    caches its own values on a 0.5 degree grid."""
+
+    def __init__(self, model: "Model", r12=None, smoothed=None, monthly=None, essn=None):
+        self.model, self.r12_given = model, r12
+        self.smoothed, self.monthly, self.essn = smoothed, monthly, essn
+        self._cache = {}
+        self._r12 = {}             # rounded time -> (R12, source)
+
+    @classmethod
+    def from_dir(cls, path, r12=None, essn_path=None):
+        """Coefficients (ccir11..22.asc) and SILSO smoothed.csv / monthly.csv from one folder,
+        as the plugin keeps them; optionally KC2G's essn.json for recent dates."""
+        sun = []
+        for name in ("smoothed.csv", "monthly.csv"):
+            try:
+                with open(os.path.join(path, name), encoding="utf-8", errors="replace") as f:
+                    sun.append(parse_silso(f.read()))
+            except OSError:
+                sun.append({})
+        essn = None
+        if essn_path:
+            try:
+                with open(essn_path, encoding="utf-8") as f:
+                    essn = json.load(f)
+            except (OSError, ValueError):
+                essn = None
+        return cls(load_dir(path), r12, sun[0], sun[1], essn)
+
+    def r12(self, when):
+        """(R12, source) for a time; (None, '') if unknown."""
+        if self.r12_given:
+            return self.r12_given, "given"
+        return r12_for(when, self.smoothed, self.monthly, self.essn)
+
+    def conditions(self, when=None):
+        t = when or _dt.datetime.now(_dt.timezone.utc)
+        t = t.replace(minute=t.minute - t.minute % STEP_MINUTES, second=0, microsecond=0)
+        r12 = self._r12.get(t)
+        if r12 is None:
+            r12 = self._r12[t] = self.r12(t)
+        r, src = r12
+        if r is None:
+            return None, "", f"no sunspot number for {t:%Y-%m}; enter one"
+        key = (t, round(r))
+        if key not in self._cache:
+            self._cache[key] = self.model.conditions(t, r)
+        return self._cache[key], f"CCIR median, R12 {r:.0f} ({src})", ""
