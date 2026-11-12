@@ -15,6 +15,11 @@ def _live_dock(parent):
     return LiveDock(parent)
 
 
+def _propagation_dock(parent):
+    from .timeline.propagation_dock import PropagationDock
+    return PropagationDock(parent)
+
+
 def _timeline_dock(parent):
     from .timeline.dock import TimelineDock
     return TimelineDock(parent)
@@ -24,6 +29,7 @@ def _timeline_dock(parent):
 DOCKS = {
     "timeline": ("Activity timeline", _timeline_dock, Qt.DockWidgetArea.BottomDockWidgetArea),
     "live": ("WSJT-X live map", _live_dock, Qt.DockWidgetArea.RightDockWidgetArea),
+    "propagation": ("Propagation over time (ALL.TXT)", _propagation_dock, Qt.DockWidgetArea.RightDockWidgetArea),
 }
 
 # The menu, by purpose. ("alg", id, text) opens a Processing tool; ("dock", key)
@@ -41,6 +47,7 @@ LAYOUT = [
         ("alg", "maidenhead:import_adif", "Import ADIF log (.adi / .adx)…"),
         None,
         ("alg", "maidenhead:summarize_exchanges", "Summarize exchanges by grid pair…"),
+        ("dock", "propagation"),
         ("alg", "maidenhead:station_balance", "Station balance from two-way reports…"),
         ("alg", "maidenhead:antenna_compare", "Antenna A/B comparison…"),
     ]),

@@ -65,7 +65,7 @@ Everything is under *Plugins → Maidenhead Mapper*, and under the Maidenhead Ma
 |---|---|
 | Grid | Create Maidenhead grid… |
 | PSK Reporter | Fetch from PSK Reporter…, Import PSK Reporter reports… |
-| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT…, Import ADIF log (.adi / .adx)…, Summarize exchanges by grid pair…, Station balance from two-way reports…, Antenna A/B comparison… |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT…, Import ADIF log (.adi / .adx)…, Summarize exchanges by grid pair…, Propagation over time (panel), Station balance from two-way reports…, Antenna A/B comparison… |
 | Ionosphere | Fetch ionosphere (KC2G)…, Check paths against the ionosphere (MUF)…, Find sporadic-E paths…, Skip distance by hour… |
 | (top level) | Activity timeline (panel) |
 
@@ -588,6 +588,64 @@ So the US–Japan corridors (EM–PM, FN–PM) were open for three hours with do
 - **A week of sessions**: give every saved session at once, at field size, to see your region's regular paths.
 - **Only your QSOs**: run it on your ADIF QSOs to see which corridors your own contacts use.
 
+### 7.7 Propagation over time (time slider)
+
+*Plugins → Maidenhead Mapper → WSJT-X → Propagation over time (ALL.TXT)* opens a panel that turns an ALL.TXT file into an animation. It shows, hour by hour or day by day, which areas could work which. Each frame shows the corridors (as in [7.6](#76-summarize-exchanges-by-grid-pair-corridors)) of that hour and the grid cells that were active. QGIS's own **Temporal Controller** (the time slider) plays them.
+
+![Propagation over time panel with file, decodes per hour chart, dates, grouping, cell size and band](images/dock_propagation.png)
+*The panel after indexing: the chart shows decodes per hour; the shaded part is the chosen window.*
+
+#### Step by step
+
+1. **Choose the file(s).** The panel suggests WSJT-X's own `ALL.TXT`. Several files can be chosen (e.g. one per radio, or old files you kept).
+2. **Index.** The panel scans the files once for their dates, bands and decodes per hour. This reads about 30 MB a second. The index is saved; next time only lines WSJT-X has added since are scanned. The summary line shows the time span and the bands.
+3. **Choose the window.** Drag across the chart, or set **From** and **To** (UTC). The panel starts with the last 24 hours.
+4. **Choose the grouping and area size.**
+
+   | Setting | Choices | Notes |
+   |---|---|---|
+   | Group by | Hour, 3 hours, Day | One frame of the animation per group. |
+   | Cell size | Field, 2×2 squares, Square | Field suits a world map. |
+   | Band | All bands, or one band | The list shows the bands in the files, busiest first. |
+   | Least exchanges | 1 | Hide corridors with fewer exchanges in a frame. |
+
+5. **Build time-slider layers.** This runs in the background. Two layers appear, and the Temporal Controller opens, set to the window and one frame per group.
+6. **Press ▶** in the Temporal Controller, or drag its slider. Use its settings (the cog) to change the speed; tick *Cumulative range* to keep earlier frames visible.
+
+Only the chosen dates are read, starting 6 hours earlier so that stations' grids seen just before the window are known.
+
+#### The layers
+
+**Corridors over time**: one line per pair of cells per frame.
+
+| Field | Meaning |
+|---|---|
+| `bin_start`, `bin_end` | The frame (UTC). The line shows only while the slider is in it. |
+| `seen` | `both ways`: each end reported the other (solid line). `A→B only` / `B→A only`: only one direction reported (dashed). `no reports`: only calls seen (dotted grey). |
+| `exchanges`, `stations_a`, `stations_b` | As in 7.6. |
+| `a_to_b_db`, `b_to_a_db`, `diff_db`, `snr_db` | Medians, as in 7.6. Colour is `snr_db`. |
+| `distance_km`, `bands`, `calls_a`, `calls_b`, `label` | |
+
+**Active cells over time**: one polygon per active cell per frame, shaded by `stations` (distinct calls in exchanges), with `exchanges`, `partner_cells` and `partners` (the cells it reached).
+
+Both are temporary layers; right-click → *Make Permanent* to keep them. The same tool is in the Processing Toolbox as *Corridors over time from ALL.TXT*, for batch runs or models; run from there, the layers are time-enabled too.
+
+#### Example
+
+The author's ALL.TXT, 11 November 2026, 18:00 UTC to 12 November 06:00 UTC, by hour, at field size: 3,822 exchanges with both grids known, in 12 hourly frames. Three of them, each showing the 40 busiest corridors:
+
+![Three world maps for 19:00, 22:00 and 01:00 UTC: Europe and Africa paths first, then Japan and South America, then the Pacific, Asia and Australia](images/res_corridors_time.png)
+*19:00 UTC: North America works Europe and West Africa. 22:00 UTC: Europe has closed; Japan and South America are open. 01:00 UTC: the activity has moved west, to the Pacific, Asia and Australia, with many one-way (dashed) paths.*
+
+Most of these decodes were on 15m. The pattern fits the day–night line moving west: as darkness reaches Europe the paths there close, while paths across the Pacific open.
+
+#### Limits
+
+- **Only what you decoded.** A corridor between two other stations appears only if you decoded both, or at least one, of them. Your receiving location shapes what you see: you hear stations near you and stations your band is open to.
+- **Grids.** An exchange needs both stations' grids. In a busy evening about 40% of exchanges lack one, because the station never sent a CQ or grid in the decoded window.
+- **No activity is not no propagation.** An empty frame may mean nobody was on, or that you weren't listening.
+- One-way (`A→B only`) corridors often mean only one side's message was decoded, not that the path was one-way.
+
 ## 8. Ionosphere
 
 Two sources of ionosphere data are available:
@@ -1089,6 +1147,8 @@ Plus:
 | `bands` | Bands it was seen exchanging on. |
 | `heard_db` | Median SNR others reported for its signal. |
 | `hears_db` | Median SNR it reported for others. |
+
+**Corridors over time** and **Active cells over time**: see [7.7](#77-propagation-over-time-time-slider).
 
 **Exchange corridors** (see [7.6](#76-summarize-exchanges-by-grid-pair-corridors)):
 

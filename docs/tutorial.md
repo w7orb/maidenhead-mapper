@@ -202,6 +202,20 @@ If you added LoTW, the log reports how many duplicates were merged, and `confirm
 
 The same works for your PSK Reporter layers.
 
+### 4b. Watch an evening as an animation
+
+1. *WSJT-X → Propagation over time (ALL.TXT)*. A panel opens on the right, with your `ALL.TXT` already chosen.
+2. Click **Index**. A chart of decodes per hour appears.
+3. Drag across the chart to pick an evening. Keep **Group by** *Hour* and **Cell size** *Field*.
+4. Click **Build time-slider layers**, then press **▶** in the Temporal Controller that opens.
+
+**You should see** the corridors change hour by hour: which areas could work which, and where the activity was.
+
+**What this tells you**: how openings move. In one November evening decoded on the US west coast (mostly 15m), paths to Europe had faded by 22:00 UTC while Japan and South America were open; later the Pacific and Australia took over.
+
+![Three world maps for 19:00, 22:00 and 01:00 UTC](images/res_corridors_time.png)
+*Three frames from one evening: Europe, then Japan and South America, then the Pacific.*
+
 ---
 
 ## Step 5. The live map while you operate (5 minutes to set up)

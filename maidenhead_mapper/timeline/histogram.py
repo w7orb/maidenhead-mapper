@@ -33,6 +33,7 @@ class Histogram(QWidget):
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self.setMouseTracking(True)
         self.data = None
+        self.labels = ("heard", "heard me")   # tooltip names of the two series (None hides one)
         self.sel = (0, 0)
         self._anchor = None
 
@@ -126,8 +127,8 @@ class Histogram(QWidget):
             self.set_selection(self._anchor, i)
             self.dragging.emit(*self.sel)
         d = self.data
-        QToolTip.showText(_global(event), f"{d.hour(i):%Y-%m-%d %H:00} UTC\n"
-                                          f"heard {d.heard[i]}, heard me {d.heard_me[i]}", self)
+        counts = ", ".join(f"{name} {n}" for name, n in zip(self.labels, (d.heard[i], d.heard_me[i])) if name)
+        QToolTip.showText(_global(event), f"{d.hour(i):%Y-%m-%d %H:00} UTC\n{counts}", self)
 
     def mouseReleaseEvent(self, event):  # noqa: N802
         if self._anchor is not None and event.button() == Qt.MouseButton.LeftButton:

@@ -36,7 +36,7 @@ Everything is under *Plugins → Maidenhead Mapper* (and the toolbar button's dr
 |---|---|
 | Grid | Create Maidenhead grid |
 | PSK Reporter | Fetch from PSK Reporter, Import PSK Reporter reports |
-| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Import ADIF log, Summarize exchanges by grid pair, Station balance from two-way reports, Antenna A/B comparison |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Import ADIF log, Summarize exchanges by grid pair, Propagation over time (panel), Station balance from two-way reports, Antenna A/B comparison |
 | Ionosphere | Fetch ionosphere (KC2G), Check paths against the ionosphere (MUF), Find sporadic-E paths, Skip distance by hour |
 | (top level) | Activity timeline (panel) |
 
@@ -133,6 +133,10 @@ It also compares **what you see with what they see**: `hears_vs_me_db` is how a 
 ### Summarize exchanges by grid pair (WSJT-X)
 
 Many exchange lines become one **corridor** per pair of grid cells (field, 2×2 squares or square) and band: the number of exchanges and distinct stations at each end, the median SNR each way (`a_to_b_db`, `b_to_a_db`), the median two-way difference (`diff_db`), the hours it was active, and the F2/Es/above-MUF counts if the input went through *Check paths*. Line width shows traffic, colour the median SNR. Station balance rows now also carry partners, median and farthest distance, bands, and the median report each way (`heard_db`, `hears_db`).
+
+### Propagation over time (WSJT-X)
+
+A panel that indexes ALL.TXT files (cached, and extended as WSJT-X appends), shows decodes per hour, and lets you pick a date range, a grouping (hour, 3 hours, day), a cell size and a band. It builds time-enabled corridor and active-cell layers and sets up QGIS's Temporal Controller, so pressing play shows which areas could work which, frame by frame. Also in the Toolbox as *Corridors over time from ALL.TXT*.
 
 ### Antenna A/B comparison (WSJT-X)
 

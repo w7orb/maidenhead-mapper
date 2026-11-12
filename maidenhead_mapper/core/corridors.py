@@ -97,6 +97,7 @@ class Corridor:
     diffs: List[int] = field(default_factory=list)
     times: List[datetime] = field(default_factory=list)
     status: Dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    bands: set = field(default_factory=set)
 
     @property
     def a_to_b_db(self):
@@ -169,6 +170,8 @@ def summarize(records: Iterable[Record], size: str = SQUARE, per_band: bool = Tr
         if c is None:
             c = groups[(ca, cb, band)] = Corridor(ca, cb, band)
         c.exchanges += 1
+        if r.band:
+            c.bands.add(r.band)
         c.calls_a.add(calls_a.upper())
         c.calls_b.add(calls_b.upper())
         if a_to_b is not None:
@@ -248,3 +251,74 @@ def station_facts(records: Iterable[Record], per_band: bool = True) -> Dict[Tupl
 def _band_order(name):
     from .bands import BAND_NAMES
     return BAND_NAMES.index(name) if name in BAND_NAMES else len(BAND_NAMES)
+
+
+# --- over time ---------------------------------------------------------------
+
+BOTH, A_TO_B, B_TO_A, NO_REPORTS = "both ways", "A→B only", "B→A only", "no reports"
+
+
+def seen(c: Corridor) -> str:
+    """Which directions the reports show working: B reported A (A->B) and/or A reported B."""
+    ab, ba = bool(c.a_to_b), bool(c.b_to_a)
+    return BOTH if ab and ba else A_TO_B if ab else B_TO_A if ba else NO_REPORTS
+
+
+def bin_floor(t: datetime, hours: int) -> datetime:
+    """Start of the bin holding t: whole UTC hours, or UTC days when hours == 24."""
+    t = t.replace(minute=0, second=0, microsecond=0)
+    if hours >= 24:
+        return t.replace(hour=0)
+    return t.replace(hour=t.hour - t.hour % hours)
+
+
+@dataclass
+class CellActivity:
+    cell: str
+    exchanges: int = 0
+    calls: set = field(default_factory=set)
+    partners: set = field(default_factory=set)      # other cells it exchanged with
+
+
+@dataclass
+class TimeBin:
+    start: datetime
+    end: datetime
+    summary: Summary
+    cells: Dict[str, CellActivity]
+    records: int = 0
+
+
+def over_time(records: Iterable[Record], size: str = FIELD, hours: int = 1,
+              start: Optional[datetime] = None, end: Optional[datetime] = None,
+              min_exchanges: int = 1, per_band: bool = False) -> List[TimeBin]:
+    """Corridors and active cells per time bin (bins of `hours`, 24 = days).
+
+    Exchanges are binned by first_utc; those without a time or outside
+    start..end are left out. Bins without exchanges are left out too.
+    """
+    from datetime import timedelta
+    groups = defaultdict(list)
+    for r in records:
+        if r.first_utc is None or (start and r.first_utc < start) or (end and r.first_utc > end):
+            continue
+        groups[bin_floor(r.first_utc, hours)].append(r)
+    out = []
+    step = timedelta(hours=24 if hours >= 24 else hours)
+    for b in sorted(groups):
+        rs = groups[b]
+        cells: Dict[str, CellActivity] = {}
+        for r in rs:
+            ca, cb = cell(r.grid_a or "", size), cell(r.grid_b or "", size)
+            for c, other, call in ((ca, cb, r.call_a), (cb, ca, r.call_b)):
+                if not c:
+                    continue
+                act = cells.get(c)
+                if act is None:
+                    act = cells[c] = CellActivity(c)
+                act.exchanges += 1
+                act.calls.add(call.upper())
+                if other and other != c:
+                    act.partners.add(other)
+        out.append(TimeBin(b, b + step, summarize(rs, size, per_band, min_exchanges=min_exchanges), cells, len(rs)))
+    return out

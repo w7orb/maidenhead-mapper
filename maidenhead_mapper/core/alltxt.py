@@ -44,18 +44,30 @@ def parse_line(line):
         return None
 
 
-def read(paths, start=None, end=None):
-    """Rows from one or more ALL.TXT files, sorted by time (optionally limited)."""
+def read(paths, start=None, end=None, offsets=None, in_order=()):
+    """Rows from one or more ALL.TXT files, sorted by time (optionally limited).
+
+    offsets: {path: byte offset} to start reading at (from an index);
+    in_order: paths whose times never go backwards, so reading can stop at `end`.
+    """
     rows = Rows()
+    offsets = offsets or {}
     for path in paths:
-        with open(path, encoding="utf-8", errors="replace") as f:
-            for line in f:
+        with open(path, "rb") as f:
+            f.seek(offsets.get(path, 0))
+            stop = path in in_order
+            for raw in f:
+                line = raw.decode("utf-8", errors="replace")
                 r = parse_line(line)
                 if r is None:
                     if line.strip():
                         rows.skipped += 1
                     continue
-                if (start and r.time < start) or (end and r.time > end):
+                if end and r.time > end:
+                    if stop:
+                        break
+                    continue
+                if start and r.time < start:
                     continue
                 rows.append(r)
     rows.sort(key=lambda r: r.time)

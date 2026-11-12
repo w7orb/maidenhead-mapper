@@ -73,3 +73,33 @@ def test_station_facts():
     assert 1000 < w.median_km < w.max_km
     k = cor.station_facts(rs)[("20m", "K4BB")]
     assert k.partners == 1 and k.heard_db == -11.0 and k.hears_db == 1.0
+
+
+def test_bin_floor():
+    t = datetime(2026, 11, 11, 21, 47, 15, tzinfo=timezone.utc)
+    assert cor.bin_floor(t, 1) == datetime(2026, 11, 11, 21, tzinfo=timezone.utc)
+    assert cor.bin_floor(t, 3) == datetime(2026, 11, 11, 21, tzinfo=timezone.utc)
+    assert cor.bin_floor(t, 6) == datetime(2026, 11, 11, 18, tzinfo=timezone.utc)
+    assert cor.bin_floor(t, 24) == datetime(2026, 11, 11, tzinfo=timezone.utc)
+
+
+def test_over_time():
+    rs = [rec("W1AA", "FN31", "K4BB", "EM78", ab=-10, ba=2),                   # 21:00
+          rec("W1AA", "FN31", "K4CC", "EM79", ab=-3, minutes=20),              # 21:20, A->B? a_hears_b only
+          rec("W1AA", "FN31", "JA1DD", "PM95", ba=-15, minutes=65),            # 22:05
+          rec("W1AA", "FN31", "W1EE", "FN31", ab=1, ba=1, minutes=70),         # same cell
+          rec("W1AA", "FN31", "K4BB", "EM78", minutes=-120)]                   # before start
+    bins = cor.over_time(rs, cor.FIELD, 1, start=T0)
+    assert [b.start.hour for b in bins] == [21, 22]
+    b21, b22 = bins
+    (c,) = b21.summary.corridors
+    assert (c.cell_a, c.cell_b, c.exchanges) == ("EM", "FN", 2)
+    assert cor.seen(c) == cor.BOTH            # FN->EM reported (-10, -3), EM->FN reported (+2)
+    assert b21.cells["FN"].exchanges == 2 and b21.cells["FN"].partners == {"EM"}
+    assert len(b21.cells["EM"].calls) == 2
+    assert b22.summary.same_cell == 1 and b22.cells["FN"].exchanges == 3     # same-cell counts twice
+    (c,) = b22.summary.corridors
+    assert cor.seen(c) == cor.A_TO_B          # FN->PM: JA1DD reported W1AA
+    assert b22.end - b22.start == timedelta(hours=1)
+    days = cor.over_time(rs, cor.FIELD, 24)
+    assert len(days) == 1 and days[0].records == 5
