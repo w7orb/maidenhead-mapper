@@ -199,6 +199,47 @@ def main():
         d.deleteLater()
     check("propagation panel", panel)
 
+    def timeline_refresh():
+        # Another tool adding a layer makes the Activity timeline rediscover its
+        # sources; dragging the chart afterwards must still work (it used to
+        # fail with "'LogSource' object has no attribute 'data'").
+        from maidenhead_mapper.core import alltxt, timeline as tl
+        from maidenhead_mapper.timeline import dock as tdock, sources as tsrc
+        log = alltxt.to_log(alltxt.read([path]), "N0CALL", "CN85")
+
+        class Fake(tsrc.Source):
+            key, name, sig, applied = "log:fake", "fake", None, []
+
+            def signature(self):
+                return Fake.sig          # None at first: the dock doesn't start a load task
+
+            def load(self, task=None):
+                return log
+
+            def count(self, data):
+                return tl.hourly_from_log(data, "N0CALL")
+
+            def apply(self, start, end):
+                Fake.applied.append(len(self.data))
+                return []
+
+        real_discover = tdock.discover
+        tdock.discover = lambda: [Fake()]
+        try:
+            d = tdock.TimelineDock(None)
+            Fake.sig = ("x",)
+            d._loaded(d.source, log)
+            assert d.hourly and len(d.hourly) >= 2, d.hourly
+            first = d.source
+            d._refresh()                         # e.g. a VOACAP output layer was added
+            assert d.source is not first
+            d._released(0, 0)                    # drag one hour
+            assert Fake.applied and Fake.applied[-1] == len(log), Fake.applied
+            d.deleteLater()
+        finally:
+            tdock.discover = real_discover
+    check("activity timeline after a layer is added", timeline_refresh)
+
     def research_export():
         import csv
         import json

@@ -97,7 +97,13 @@ class TimelineDock(QDockWidget):
         if self.combo.currentData() != current or self.source is None:
             self._source_changed()
         else:
-            self.source = self.sources.get(current)
+            # discover() made a fresh Source for the same key (e.g. after another
+            # tool added a layer); keep the data already loaded, or dragging the
+            # chart would hit a Source with no data.
+            old, new = self.source, self.sources.get(current)
+            if new is not old and hasattr(old, "data") and not hasattr(new, "data"):
+                new.data, new.hourly = old.data, old.hourly
+            self.source = new
 
     def _source_changed(self, *_):
         self.source = self.sources.get(self.combo.currentData())
@@ -198,6 +204,9 @@ class TimelineDock(QDockWidget):
     def _apply(self, i0, i1):
         s, h = self.source, self.hourly
         if s is None or not h:
+            return
+        if not hasattr(s, "data"):       # not loaded yet: load, then the chart is redrawn
+            self._load(s)
             return
         whole = (i0, i1) == (0, len(h) - 1)
         start, end = (None, None) if whole else h.span(i0, i1)

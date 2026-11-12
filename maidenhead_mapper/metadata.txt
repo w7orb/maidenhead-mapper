@@ -12,7 +12,7 @@ about=For amateur (ham) radio operators.
     Predict paths with VOACAP: runs your installed VOACAP (not included) on exchanges and corridors and adds its MUF, mode, REL and SNR, and the gap between what was heard and what it predicts.
     Export research dataset: one CSV row per observed SNR from ALL.TXT (exchange reports and your decodes, with path, control points and day/night), optionally pseudonymised, for sharing with other operators and researchers.
     No extra Python packages needed.
-version=0.14.0
+version=0.14.1
 author=Cody Tews
 email=w7orb.radio@gmail.com
 homepage=https://github.com/w7orb/maidenhead-mapper
@@ -25,6 +25,8 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.14.1
+    - Fix: Activity timeline failed ("'LogSource' object has no attribute 'data'") when dragging the chart after another tool had added or removed a layer
     0.14.0
     - New: Predict paths with VOACAP (Ionosphere): runs the user's installed VOACAP (NTIA/ITS itshfbc on Windows, voacapl on Linux/macOS; not included) for exchanges, corridors, corridors over time and Check paths output, both directions. Adds voacap_muf, voacap_mode, voacap_tangle_deg, voacap_rel, voacap_snr_db (2500 Hz, = 1 Hz SNR - 34 dB), voacap_snr_hz and snr_gap_db = observed - predicted, coloured by the gap. Many paths per VOACAP run; results cached. On Windows VOACAP runs on a hidden desktop with a timeout, so no windows appear
     - Tests: deck and output parsing against real VOACAP 16.1207W output and voacapl's sample files; a check against the real program when installed; QGIS smoke check
