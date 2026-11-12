@@ -692,7 +692,7 @@ The author's ALL.TXT, 11 November 2026 18:00 UTC to 12 November 06:00 UTC: 45,47
 - **Only what you decoded.** A signal you didn't decode is not a row. Repeated reports (`n_decoded` over 1) hint that the reply wasn't heard.
 - **Censoring.** Below about −24 dB FT8 doesn't decode, so weak signals are missing rather than low. Treat `censored` rows as "this or lower".
 - **Grids.** FT8 sends 4-character grids, so a station can be up to ~100 km from its grid's centre. Rows without both grids have empty path fields.
-- **Pseudonyms are not anonymity.** Grids, times and frequencies can still point to a station. Pseudonymise and cut grids to 4 characters before sharing widely.
+- **Callsigns are kept by default.** Callsigns and grids are sent openly on the air and published by PSK Reporter, so the export keeps them. *Pseudonymise callsigns* is there if a project asks for codes instead; note that grids, times and frequencies can still point to a station.
 
 ## 8. Ionosphere
 

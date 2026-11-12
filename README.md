@@ -164,7 +164,7 @@ Below the decode floor the weaker antenna reports nothing rather than a low SNR,
 
 ### Export research dataset (WSJT-X)
 
-Writes ALL.TXT decodes as a CSV with one row per observed SNR, for merging with other operators' data and sharing (e.g. HamSCI, Zenodo): the reports stations sent each other in exchanges and your own decodes, linked by `exchange_id`, with distance, bearing, fewest hops, control points, day/night there and a censored flag. Callsigns can be pseudonymised (salted SHA-256). A `.schema.json` next to the CSV describes every field; see [docs/research-export-schema.md](docs/research-export-schema.md).
+Writes ALL.TXT decodes as a CSV with one row per observed SNR, for merging with other operators' data and sharing (e.g. HamSCI, Zenodo): the reports stations sent each other in exchanges and your own decodes, linked by `exchange_id`, with distance, bearing, fewest hops, control points, day/night there and a censored flag. Callsigns are kept as sent on the air; pseudonymising them (salted SHA-256) is an option, off by default. A `.schema.json` next to the CSV describes every field; see [docs/research-export-schema.md](docs/research-export-schema.md).
 
 ### Activity timeline
 
