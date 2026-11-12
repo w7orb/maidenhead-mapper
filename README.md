@@ -4,17 +4,17 @@ QGIS plugin for amateur-radio Maidenhead maps.
 
 **Documentation**: the [tutorial](docs/tutorial.md) walks through a first hour; the [user guide](docs/user-guide.md) covers every tool, setting and output field, plus troubleshooting.
 
-![Green and red great-circle paths with reflection points over MUF contours](docs/images/res_check_paths.png)
-*FT8 exchanges checked against KC2G's MUF(3000) map: green paths the F2 layer can explain, red ones above the F2 MUF, with their reflection points.*
+![Animated world map: hour by hour from 18:00 to 06:00 UTC, FT8 corridors between grid fields move from Europe to Japan and South America, then across the Pacific](docs/images/propagation_over_time.gif)
+*Propagation over time: one November evening of FT8 decodes from the US west coast, hour by hour. Lines join grid fields whose stations worked each other (solid = both ways, dashed = one way), coloured by median SNR; shaded fields were active.*
 
 | | |
 |---|---|
 | ![Exchange lines between stations decoded from WSJT-X ALL.TXT](docs/images/res_alltxt_exchanges.png) | ![Corridors: exchanges summarized by grid field pair, coloured by median SNR](docs/images/res_corridors.png) |
 | **Exchanges from ALL.TXT**: who worked whom, including QSOs between other stations | **Corridors**: the same exchanges summarized by grid pair, coloured by median SNR |
-| ![World map of stations reported by PSK Reporter, coloured by band](docs/images/res_psk_band.png) | ![World map covered by labelled Maidenhead fields](docs/images/res_grid_world.png) |
-| **PSK Reporter**: stations one receiver reported in 6 hours, by band | **Maidenhead grid**: correctly aligned fields, with squares when zoomed in |
+| ![World map of stations reported by PSK Reporter, coloured by band](docs/images/res_psk_band.png) | ![Green and red great-circle paths with reflection points over MUF contours](docs/images/res_check_paths.png) |
+| **PSK Reporter**: stations one receiver reported in 6 hours, by band | **Ionosphere**: paths the F2 layer can explain (green) and ones above its MUF (red), over KC2G's MUF map |
 
-The *Propagation over time* panel plays these hour by hour with QGIS's time slider ([three frames from one evening](docs/images/res_corridors_time.png)).
+All of it sits on a correctly aligned Maidenhead grid of fields and squares.
 
 - **Create Maidenhead grid**: field (2-char, 20°×10°) and square (4-char, 2°×1°) polygon layers with a `locator` attribute. They come pre-styled and labelled; squares appear when zoomed in past 1:20,000,000.
 - **Fetch from PSK Reporter**: downloads the last 1–24 hours of reports for a callsign into a folder, then maps the whole folder. It keeps to PSK Reporter's limit of one query per 5 minutes.
