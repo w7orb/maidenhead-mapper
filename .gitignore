@@ -21,3 +21,6 @@ Thumbs.db
 # Machine-specific MCP config (points at a local qgis-mcp clone)
 .mcp.json
 dist/
+
+# Private working notes
+docs/novelty_search.md
