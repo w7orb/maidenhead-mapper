@@ -530,6 +530,9 @@ It works on any exchange layer: live, saved session, ALL.TXT, ADIF QSOs, or the 
 | Least exchanges per corridor | 3 | Hides one-off pairs. |
 | Exchange corridors | temporary layer | Lines coloured by median SNR, wider with more exchanges. |
 
+![Summarize exchanges by grid pair dialog](images/dlg_summarize_exchanges.png)
+*The Summarize exchanges by grid pair dialog.*
+
 #### How it works
 
 Each exchange is placed in the cells of its two grids. The two cells are put in alphabetical order, `cell_a` before `cell_b`. Because the first locator letter is longitude, `cell_a` is usually the western end. An exchange stored the other way round has its reports swapped, so each direction stays separate:
@@ -564,6 +567,12 @@ At field size, 160 lines cover 2,705 of the 3,036 exchanges. The busiest:
 | FN | PM | 91 | 38 | 44 | −14.5 | −15.0 | −1.0 (25) | 10,894 | 3 |
 
 So the US–Japan corridors (EM–PM, FN–PM) were open for three hours with dozens of stations at each end, at a typical −11 to −15 dB, about 10–15 dB weaker than the domestic paths. EM–PM has a −5.5 dB `diff_db` over 26 two-way exchanges: the Japanese stations heard the EM stations better than the reverse, more than fading alone would explain.
+
+![Corridor lines between grid fields, from North America to Japan, Europe, South America and the Pacific](images/res_corridors.png)
+*The 40 busiest field corridors (19 or more exchanges each) from the same evening. Width shows exchanges; colour shows median SNR (purple weak, yellow strong). Most of the traffic runs between the US and Japan.*
+
+![Corridors between 2×2-square blocks across the central and eastern US, labelled with counts and SNR each way](images/res_corridors_zoom.png)
+*Zoomed in at 2×2-square size: 40 busy corridors in the central and eastern US. A label such as `11×  -11/+10` gives the number of exchanges, then the median SNR from the first cell to the second and back (– where there was no report that way).*
 
 #### Reading the results
 

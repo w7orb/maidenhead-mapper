@@ -354,6 +354,9 @@ With thousands of exchanges, the lines are unreadable. Summarize them:
 
 **What this tells you**: which paths were really open, how strong they were, and for how long (`hours_active`). Check `stations_a` and `stations_b`: a corridor with one station at one end is a single busy station, not an open path. Rerun with *2×2 squares* or *Square* to look at your region in more detail.
 
+![Corridor lines between grid fields, from North America to Japan, Europe, South America and the Pacific](images/res_corridors.png)
+*The 40 busiest field corridors from one evening's live map. Most traffic ran between the US and Japan.*
+
 ---
 
 ## Step 8 (optional). Compare two antennas

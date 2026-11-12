@@ -102,7 +102,7 @@ def corridor_renderer():
         sym.setOpacity(0.85)
         sym.symbolLayer(0).setDataDefinedProperty(
             QgsSymbolLayer.PropertyStrokeWidth,
-            QgsProperty.fromExpression("min(3, 0.25 + 0.35 * sqrt(\"exchanges\"))"))
+            QgsProperty.fromExpression("min(2, 0.2 + 0.12 * sqrt(\"exchanges\"))"))
         ranges.append(QgsRendererRange(lo, hi, sym, label))
     r = QgsGraduatedSymbolRenderer("snr_db", ranges)
     return r
@@ -186,8 +186,8 @@ class SummarizeExchangesAlgorithm(QgsProcessingAlgorithm):
             options=[self.tr("Field (EM)"), self.tr("2×2 squares"), self.tr("Square (EM78)")], defaultValue=2))
         self.addParameter(QgsProcessingParameterBoolean(
             self.PER_BAND, self.tr("Separately per band"), defaultValue=True))
-        self.addParameter(QgsProcessingParameterDateTime(self.START, self.tr("From (optional, UTC)"), optional=True))
-        self.addParameter(QgsProcessingParameterDateTime(self.END, self.tr("To (optional, UTC)"), optional=True))
+        self.addParameter(QgsProcessingParameterDateTime(self.START, self.tr("From (UTC)"), optional=True))
+        self.addParameter(QgsProcessingParameterDateTime(self.END, self.tr("To (UTC)"), optional=True))
         self.addParameter(QgsProcessingParameterNumber(
             self.MIN_N, self.tr("Least exchanges per corridor"), QgsProcessingParameterNumber.Integer,
             defaultValue=3, minValue=1))
