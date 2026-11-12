@@ -50,6 +50,8 @@ class FileIndex:
         """Byte offset to start reading at for times >= start (0 if unknown or out of order)."""
         if start is None or not self.in_order or not self.days:
             return 0
+        if self.last is not None and start.timestamp() > self.last:
+            return self.size        # the whole file is before start: skip it
         day = int(_dt.datetime(start.year, start.month, start.day, tzinfo=UTC).timestamp())
         best = 0
         for d, off in self.days.items():

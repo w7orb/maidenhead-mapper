@@ -190,6 +190,19 @@ def summarize(records: Iterable[Record], size: str = SQUARE, per_band: bool = Tr
     return Summary(out, same, no_grid, outside)
 
 
+def records_from_model(model) -> Tuple[List[Record], int]:
+    """Records for every exchange in a live.LiveModel with both grids known,
+    and the number of exchanges left out for lack of a grid."""
+    out, unplaced = [], 0
+    for ex in model.exchanges.exchanges.values():
+        ga, gb = model.grid_of(ex.a), model.grid_of(ex.b)
+        if not (ga and gb):
+            unplaced += 1
+            continue
+        out.append(Record(ex.a, ga, ex.b, gb, ex.band or "", ex.a_hears_b, ex.b_hears_a, ex.first_utc))
+    return out, unplaced
+
+
 def _mode(r: Record) -> Optional[str]:
     """'F2', 'Es', 'above MUF' or 'no data' from Check paths' fields (mode_guess preferred)."""
     if r.mode_guess:

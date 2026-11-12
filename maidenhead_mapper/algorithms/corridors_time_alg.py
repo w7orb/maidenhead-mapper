@@ -287,13 +287,7 @@ class CorridorsOverTimeAlgorithm(QgsProcessingAlgorithm):
         feedback.setProgressText(self.tr("Rebuilding exchanges…"))
         model = live.replay(alltxt.to_log(rows, mycall, mygrid))
         feedback.setProgress(70)
-        records, unplaced = [], 0
-        for ex in model.exchanges.exchanges.values():
-            ga, gb = model.grid_of(ex.a), model.grid_of(ex.b)
-            if not (ga and gb):
-                unplaced += 1
-                continue
-            records.append(cor.Record(ex.a, ga, ex.b, gb, ex.band or "", ex.a_hears_b, ex.b_hears_a, ex.first_utc))
+        records, unplaced = cor.records_from_model(model)
         # 'To' is exclusive: an exchange starting exactly then belongs to the next bin
         bins = cor.over_time(records, size, hours, start, end - timedelta(microseconds=1), min_n)
         n_ex = sum(b.records for b in bins)

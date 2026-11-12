@@ -10,7 +10,7 @@ about=For amateur (ham) radio operators.
     WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
     Ionosphere: check any paths against KC2G's current maps or the CCIR monthly-median model: path MUF, hops at the layer height, and which contacts F2 can't explain.
     No extra Python packages needed.
-version=0.11.0
+version=0.11.1
 author=Cody Tews
 email=cwtews@gmail.com
 homepage=https://github.com/cwtews/maidenhead-mapper
@@ -23,6 +23,10 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.11.1
+    - Propagation over time: chart selection no longer drops the last hour when 'To' is past the end of the data; files entirely before the window are skipped
+    - Tests: end-to-end ALL.TXT -> corridors-over-time tests, and a QGIS smoke test (tests/qgis_smoke.py)
+    - Docs: glossary, cache folder, troubleshooting and animation export for Propagation over time
     0.11.0
     - New panel: Propagation over time. Indexes ALL.TXT (cached, incremental), pick dates on a chart, group by hour / 3 hours / day, and play corridors and active cells with the Temporal Controller
     - New: Corridors over time from ALL.TXT (Processing); ALL.TXT reading can start at an indexed offset

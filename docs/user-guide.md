@@ -91,6 +91,9 @@ Every tool is also in the **Processing Toolbox** (*Processing → Toolbox*) unde
 | **Sporadic-E (Es)** | Patches of dense ionisation at about 105 km that come and go, mostly in summer. They open 10m and 6m over 500–2,300 km when F2 can't. |
 | **Skip zone** | The ring around you too far for ground wave but too close for sky wave. Its outer edge is the *skip distance*. |
 | **Ionosonde** | A radar that measures foF2, hmF2 and MUF directly above it. |
+| **Corridor** | All the exchanges between two grid cells (on one band, or in one time frame), drawn as one line with medians of the reports each way. |
+| **Frame** | One step of an animation: an hour, 3 hours or a day. A time-enabled layer shows only the features of the current frame. |
+| **Temporal Controller** | QGIS's built-in time slider (*View → Panels → Temporal Controller*). It plays time-enabled layers frame by frame. |
 | **Sunspot number (R12)** | The 12-month smoothed sunspot number. The CCIR model uses it to scale the ionosphere to the solar cycle. |
 
 ## 5. Grid: Create Maidenhead grid
@@ -613,6 +616,10 @@ So the US–Japan corridors (EM–PM, FN–PM) were open for three hours with do
 6. **Press ▶** in the Temporal Controller, or drag its slider. Use its settings (the cog) to change the speed; tick *Cumulative range* to keep earlier frames visible.
 
 Only the chosen dates are read, starting 6 hours earlier so that stations' grids seen just before the window are known.
+
+**Saving an animation.** In the Temporal Controller, the *Export animation* button (the film icon) writes one PNG per frame. A video tool, or the separate *Animation Workbench* plugin, can turn them into a video.
+
+**Why not a time plugin?** This uses QGIS's built-in Temporal Controller (QGIS 3.14 and later). The older *TimeManager* plugin it replaced isn't needed. Maidenhead Mapper's part is the data: indexing ALL.TXT, rebuilding exchanges, and giving each corridor its frame's start and end time.
 
 #### The layers
 
@@ -1194,6 +1201,7 @@ The plugin keeps downloads in your QGIS profile folder. On Windows this is `%APP
 | Folder | Contents |
 |---|---|
 | `maidenhead_mapper\kc2g\` | KC2G cache: `stations.json`, `mufd.geojson`, `fof2.geojson`, `hmf2.geojson`, `essn.json`, `meta.json`. Refreshed at most every 15 minutes. |
+| `maidenhead_mapper\alltxt_index\` | One small JSON index per ALL.TXT file used in *Propagation over time*: time span, bands, decodes per hour and where each day starts. Extended when the file grows; rebuilt if it was replaced. |
 | `maidenhead_mapper\ccir\` | CCIR model coefficients `ccir11.asc`–`ccir22.asc` (~0.5 MB, downloaded once), and SILSO sunspot numbers `smoothed.csv` and `monthly.csv` (refreshed weekly). |
 
 Your own data stays where you put it:
@@ -1206,7 +1214,8 @@ Your own data stays where you put it:
 
 - `mycall`, `mygrid`: your callsign and grid;
 - `psk_folder`: the last PSK Reporter folder;
-- `live/…`: the live panel's mode, address, port, fade, save and folder.
+- `live/…`: the live panel's mode, address, port, fade, save and folder;
+- `propagation_files`: the ALL.TXT files last used in *Propagation over time*.
 
 Deleting the cache folders is safe; the data is downloaded again when needed.
 
@@ -1242,6 +1251,17 @@ An unsaved live map's decodes are kept only while it runs. Tick *Save session to
 
 **The Activity timeline doesn't list my layer**
 It lists layers made by the PSK Reporter tools, *Import ALL.TXT* and the live map, and session GeoPackages loaded from the `.gpkg` (recognised by their `stations`, `exchanges` and `log` tables). Load the `stations` or `exchanges` table, not `log`. ADIF layers are not listed.
+
+**Propagation over time: "No exchanges with both grids known in this window"**
+Nothing in the chosen hours could be placed: no exchanges, or the stations never sent grids. Pick a busier window on the chart (taller bars), or try *All bands*.
+
+**Propagation over time: the map shows every hour at once, or nothing**
+- *Every hour at once*: the Temporal Controller is off (its first button). Choose the *Animated* mode (the ▶ icon in its toolbar).
+- *Nothing*: the slider is outside the built window, or in an hour without exchanges. Press the "go to start" button, or set the range from the layer (the refresh button next to the range).
+- To keep earlier frames visible, tick *Cumulative range* in the Temporal Controller's settings.
+
+**Propagation over time: Index finds no decodes**
+The file isn't a WSJT-X 2.1+ `ALL.TXT` (lines like `261111_210000    14.074 Rx FT8 ...`). Older formats aren't read.
 
 **PSK Reporter: "wait N min"**
 PSK Reporter allows one query per 5 minutes. Wait, or map what you already have with *Import PSK Reporter reports*.

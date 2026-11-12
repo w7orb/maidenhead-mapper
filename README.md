@@ -223,7 +223,7 @@ maidenhead_mapper/
   provider.py    Processing provider (id "maidenhead")
   plugin.py      menu/toolbar wiring
 tools/           replay_alltxt.py (fake WSJT-X from a recorded log), package.py (release zip)
-tests/           pytest for core/
+tests/           pytest for core/, and qgis_smoke.py for the QGIS side
 ```
 
 ## Tests
@@ -233,6 +233,14 @@ python -m pytest
 ```
 
 Runs with any Python 3.8+ that has pytest installed; QGIS is not needed. The plugin itself uses only the Python standard library and QGIS.
+
+A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance and Propagation over time tools (including the time-enabled layers and the panel) work on a small synthetic `ALL.TXT`. It runs in QGIS's own Python, so nothing is installed there:
+
+```
+"C:\Program Files\QGIS 3.44.2\bin\python-qgis.bat" tests\qgis_smoke.py
+```
+
+or as part of pytest by setting `MM_QGIS_PYTHON` to that launcher (otherwise it is skipped).
 
 A few checks against real recordings (PSK Reporter pulls and WSJT-X `ALL.TXT` files) are skipped unless `MM_REAL_DATA` points to a folder with `data/misc2/` and `wsjtx/data/2022_12_13/`; see `tests/realdata.py`.
 

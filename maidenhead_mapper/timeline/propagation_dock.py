@@ -203,10 +203,12 @@ class PropagationDock(QDockWidget):
     def _to_hist(self, *_):
         if not self.hourly or not len(self.hourly):
             return
-        from datetime import datetime, timezone
+        from datetime import datetime, timedelta, timezone
         s = datetime.fromtimestamp(self.start.dateTime().toSecsSinceEpoch(), timezone.utc)
         e = datetime.fromtimestamp(self.end.dateTime().toSecsSinceEpoch(), timezone.utc)
-        self.hist.set_selection(self.hourly.index(s), self.hourly.index(e) - (1 if e.minute == 0 and e > s else 0))
+        # 'To' is exclusive: select up to the hour holding its last instant
+        last = e - timedelta(microseconds=1) if e > s else e
+        self.hist.set_selection(self.hourly.index(s), self.hourly.index(last))
 
     # --- building ---------------------------------------------------------------
     def _build(self):
