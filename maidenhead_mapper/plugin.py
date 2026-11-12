@@ -56,6 +56,7 @@ LAYOUT = [
     ("Ionosphere", [
         ("alg", "maidenhead:fetch_ionosphere", "Fetch ionosphere (KC2G)…"),
         ("alg", "maidenhead:check_paths", "Check paths against the ionosphere (MUF)…"),
+        ("alg", "maidenhead:voacap_paths", "Predict paths with VOACAP…"),
         None,
         ("alg", "maidenhead:sporadic_e", "Find sporadic-E paths…"),
         ("alg", "maidenhead:skip_distance", "Skip distance by hour…"),

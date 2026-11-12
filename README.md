@@ -21,6 +21,7 @@ All of it sits on a correctly aligned Maidenhead grid of fields and squares.
 - **Import PSK Reporter reports**: a folder of `psk_*.json` pulls (from *Fetch*) becomes one marker per remote station and direction: *heard* (I decoded them) or *heard_me* (they decoded me). Each marker has report count, best/median/last SNR, bands, modes, first/last time (UTC), and distance/bearing from my grid. You can filter by direction, band and time. It can be styled by SNR, band or direction, and callsign labels appear when zoomed in.
 - **Import WSJT-X ALL.TXT**: replays WSJT-X logs through the live map's logic, giving station markers and exchange lines (including exchanges between other stations) for past sessions.
 - **Import ADIF log**: maps your logged QSOs from `wsjtx_log.adi`, JTDX, N1MM, LoTW or any logger's ADIF export (.adi or .adx), merging the same QSO across files.
+- **Predict paths with VOACAP**: run your installed VOACAP (free from NTIA/ITS; not included) on exchanges and corridors. Each path gets VOACAP's MUF, mode, takeoff angle, reliability and SNR, and the gap between what was heard and what VOACAP predicts.
 - **Ionosphere (KC2G)**: fetch current ionosonde data and MUF/foF2/hmF2 maps, and check any station or exchange layer against them. Each path gets its MUF, layer height, hop count and whether F2 can explain it, plus a layer of reflection points.
 - **Sporadic-E, skip distance, station balance**: find paths only sporadic-E explains (with the minimum foEs), follow the skip zone hour by hour, and compare stations' signal vs receive from two-way reports.
 - **Activity timeline**: a chart of reports per hour for any of the above (PSK Reporter, ALL.TXT, live or saved sessions). Drag across it to map only those hours.
@@ -49,7 +50,7 @@ Everything is under *Plugins → Maidenhead Mapper* (and the toolbar button's dr
 | Grid | Create Maidenhead grid |
 | PSK Reporter | Fetch from PSK Reporter, Import PSK Reporter reports |
 | WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Import ADIF log, Summarize exchanges by grid pair, Propagation over time (panel), Station balance from two-way reports, Antenna A/B comparison, Export research dataset |
-| Ionosphere | Fetch ionosphere (KC2G), Check paths against the ionosphere (MUF), Find sporadic-E paths, Skip distance by hour |
+| Ionosphere | Fetch ionosphere (KC2G), Check paths against the ionosphere (MUF), Predict paths with VOACAP, Find sporadic-E paths, Skip distance by hour |
 | (top level) | Activity timeline (panel) |
 
 The ionosphere tools take any station or exchange layer; they aren't tied to the live map. All tools are also in the *Processing Toolbox → Maidenhead Mapper*.
@@ -121,6 +122,10 @@ Two sources, chosen per path (*Ionosphere source*; `iono_source` records which w
   Tick *Also write the results into the input layer* to add these fields to the input layer itself (memory or GeoPackage, e.g. a saved session) as well as the output layer. It's skipped with a warning if the layer is being edited or can't be changed. Exchanges that arrive later, or a timeline rebuild, leave the fields empty; run it again to refill.
   With *Auto*, recent paths use KC2G and older ones the CCIR model. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, with `kind` *hop* (where each hop meets the layer; grey dots) and *control point* (where P.533 judges the MUF, coloured by whether the band fits).
 - Near a current, trusted ionosonde (confidence 50 or higher), the maps are corrected towards its measurements; the correction fades out over about 1,000 km. Contour maps can't show peaks above their top level (MUF(3000) stops at 28 MHz), and this fills that in where there's an ionosonde.
+
+### Predict paths with VOACAP
+
+Runs VOACAP for every exchange or corridor line (both directions) and compares it with what was heard. VOACAP is not included: install the free NTIA/ITS package ([ITS VOACAP page](https://its.ntia.gov/software/high-frequency/voacap-propagation-model/)) in `C:\itshfbc`, or `voacapl` on Linux/macOS. Adds `voacap_muf`, `voacap_mode`, `voacap_tangle_deg`, `voacap_rel`, `voacap_snr_db` (as WSJT-X reports it: VOACAP's 1 Hz SNR − 34 dB), `voacap_snr_hz` and `snr_gap_db` = observed − predicted, coloured by the gap. Defaults: 100 W and an isotrope at both ends, residential noise (−145 dBW at 3 MHz), required SNR −21 dB, method 30. VOACAP predicts monthly medians, so judge the gap over many paths and days. Many paths go into one VOACAP run, and results are cached. On Windows VOACAP runs on a hidden desktop with a time limit, so no VOACAP windows appear.
 
 ### Find sporadic-E paths
 
@@ -250,13 +255,15 @@ python -m pytest
 
 Runs with any Python 3.8+ that has pytest installed; QGIS is not needed. The plugin itself uses only the Python standard library and QGIS.
 
-A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance, Propagation over time (including the time-enabled layers and the panel) and research export tools work on a small synthetic `ALL.TXT`. It runs in QGIS's own Python, so nothing is installed there:
+A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance, Propagation over time (including the time-enabled layers and the panel) and research export tools work on a small synthetic `ALL.TXT`, and that *Predict paths with VOACAP* gives its clear error without VOACAP (and runs, when VOACAP is installed). It runs in QGIS's own Python, so nothing is installed there:
 
 ```
 "C:\Program Files\QGIS 3.44.2\bin\python-qgis.bat" tests\qgis_smoke.py
 ```
 
 or as part of pytest by setting `MM_QGIS_PYTHON` to that launcher (otherwise it is skipped).
+
+The VOACAP tests parse real VOACAP output (in `tests/data/voacap/`); one more runs the installed program and is skipped if VOACAP isn't found (`MM_VOACAP_DIR` points to a non-default *itshfbc* folder).
 
 A few checks against real recordings (PSK Reporter pulls and WSJT-X `ALL.TXT` files) are skipped unless `MM_REAL_DATA` points to a folder with `data/misc2/` and `wsjtx/data/2022_12_13/`; see `tests/realdata.py`.
 

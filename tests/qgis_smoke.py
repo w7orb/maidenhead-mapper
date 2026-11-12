@@ -138,7 +138,47 @@ def main():
         r = processing.run("maidenhead:corridors_over_time", {"FILES": [path], "BIN": 0, "BAND": "20m",
                                                                "OUTPUT": "memory:", "CELLS": None}, context=ctx)
         assert layer(r["OUTPUT"]).featureCount() == 1
+        out["corr_time"] = corr
     check("corridors over time", over_time)
+
+    def voacap_paths():
+        from qgis.core import QgsProcessingException
+        from maidenhead_mapper.algorithms import voacap_alg
+        from maidenhead_mapper.core import voacap as vc
+        voacap_alg.cache_dir = lambda: os.path.join(tmp, "voacap")    # keep the user's cache out of it
+        try:
+            inst = vc.find_install(os.environ.get("MM_VOACAP_DIR", ""))
+        except vc.NotInstalled:
+            inst = None
+        params = {"SSN": 120, "OUTPUT": "memory:"}
+        # a folder without VOACAP always fails with the clear message
+        empty = os.path.join(tmp, "no_voacap")
+        os.makedirs(empty, exist_ok=True)
+        try:
+            processing.run("maidenhead:voacap_paths", dict(params, INPUT=out["ex"], FOLDER=empty), context=ctx)
+            raise AssertionError("ran without VOACAP")
+        except QgsProcessingException as exc:
+            assert "VOACAP was not found" in str(exc) and "its.ntia.gov" in str(exc), str(exc)
+        if inst is None:
+            print("     (VOACAP not installed: only the error path was checked)")
+            return
+        before = set(os.listdir(inst.run_dir)) if inst.kind == "windows" else set()
+        for name, src in (("exchanges", out["ex"]), ("corridors over time", out["corr_time"])):
+            r = processing.run("maidenhead:voacap_paths", dict(params, INPUT=src), context=ctx)
+            lyr = layer(r["OUTPUT"])
+            rows = list(lyr.getFeatures())
+            assert len(rows) == src.featureCount(), name
+            ok = [f for f in rows if f["voacap_ok"] == 1]
+            print(f"     {name}: {len(ok)}/{len(rows)} predicted;",
+                  [(f["voacap_mode"], f["voacap_snr_db"], f["snr_gap_db"], f["voacap_note"]) for f in rows])
+            assert ok, [f["voacap_note"] for f in rows]
+            assert all(f["voacap_snr_db"] == round(f["voacap_snr_hz"] - 33.98, 1) or
+                       abs(f["voacap_snr_db"] - (f["voacap_snr_hz"] - 33.98)) < 0.06 for f in ok)
+            lyr.setRenderer(voacap_alg.gap_renderer())
+            lyr.setLabeling(voacap_alg.gap_labels())
+        if inst.kind == "windows":
+            assert set(os.listdir(inst.run_dir)) == before, "files left in the VOACAP run folder"
+    check("VOACAP paths", voacap_paths)
 
     def panel():
         from maidenhead_mapper.core import alltxt_index

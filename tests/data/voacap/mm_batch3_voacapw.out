@@ -1,0 +1,142 @@
+  IONOSPHERIC COMMUNICATIONS ANALYSIS AND PREDICTION PROGRAM
+                     VOACAP   VERSION 16.1207W
+ 
+ 
+          1         2         3         4         5         6         7
+ 123456789012345678901234567890123456789012345678901234567890123456789012345
+ 
+ COMMENT    Maidenhead Mapper: VOACAP point-to-point predictions
+ LINEMAX    9999       number of lines-per-page
+ COEFFS    CCIR
+ TIME         22   22    1    1
+ MONTH      202611.00
+ SUNSPOT    120.
+ LABEL     MM000000            MM000000RX
+ CIRCUIT   35.80N     5.90W    44.90N    20.50E  S     0
+ SYSTEM     1.00 145. 3.00  90. 13.0 3.00 0.10
+ FPROB      1.00 1.00 1.00 0.00
+ ANTENNA       1    1    2   30     0.000[default\isotrope     ]  0.0    0.1000
+ ANTENNA       2    2    2   30     0.000[default\isotrope     ]  0.0    0.0000
+ FREQUENCY  7.0714.0721.0728.07 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+ METHOD       30    0
+ EXECUTE
+ TIME         23   23    1    1
+ MONTH      202611.00
+ SUNSPOT    120.
+ LABEL     MM000001            MM000001RX
+ CIRCUIT   47.50N   122.50W    51.50N     0.10W  S     0
+ SYSTEM     1.00 145. 3.00  90. 13.0 3.00 0.10
+ FPROB      1.00 1.00 1.00 0.00
+ FREQUENCY 14.07 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+ METHOD       30    0
+ EXECUTE
+ TIME         24   24    1    1
+ MONTH      202611.00
+ SUNSPOT    120.
+ LABEL     MM000002            MM000002RX
+ CIRCUIT   33.90S   151.20E    40.70N    74.00W  S     0
+ SYSTEM     1.00 145. 3.00  90. 13.0 3.00 0.10
+ FPROB      1.00 1.00 1.00 0.00
+ FREQUENCY 14.0710.14 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00
+ METHOD       30    0
+ EXECUTE
+ QUIT
+     CCIR Coefficients        ~METHOD 30   VOACAP 16.1207W  PAGE   1
+ 
+  Nov    2026          SSN = 120.                Minimum Angle= 3.000 degrees
+  MM000000            MM000000RX            AZIMUTHS          N. MI.      KM
+  35.80 N    5.90 W - 44.90 N   20.50 E     57.41  254.73    1317.9   2440.5
+  XMTR  2-30 +  0.0 dBi[default\isotrope     ] Az=  0.0 OFFaz= 57.4   0.100kW
+  RCVR  2-30 +  0.0 dBi[default\isotrope     ] Az=  0.0 OFFaz=254.7
+  3 MHz NOISE = -145.0 dBW     REQ. REL = 90%    REQ. SNR = 13.0 dB
+  MULTIPATH POWER TOLERANCE =  3.0 dB   MULTIPATH DELAY TOLERANCE =  0.100 ms
+ 
+  22.0 13.6  7.1 14.1 21.1 28.1  0.0  0.0  0.0  0.0  0.0  0.0  0.0 FREQ
+        1F2  1F2  1F2  1F2  1F2   -    -    -    -    -    -    -  MODE
+       14.3  7.7 14.3 14.3 14.3   -    -    -    -    -    -    -  TANGLE
+        8.9  8.5  8.9  8.9  8.9   -    -    -    -    -    -    -  DELAY
+        455  294  455  455  455   -    -    -    -    -    -    -  V HITE
+       0.50 1.00 0.38 0.00 0.00   -    -    -    -    -    -    -  MUFday
+        142  131  146  271  284   -    -    -    -    -    -    -  LOSS
+          7   13    4 -117 -128   -    -    -    -    -    -    -  DBU
+       -122 -111 -126 -251 -264   -    -    -    -    -    -    -  S DBW
+       -163 -152 -163 -168 -172   -    -    -    -    -    -    -  N DBW
+         40   41   38  -82  -93   -    -    -    -    -    -    -  SNR
+         -1  -14    2  117  120   -    -    -    -    -    -    -  RPWRG
+       0.90 0.99 0.88 0.00 0.00   -    -    -    -    -    -    -  REL
+       0.00 0.00 0.00 0.00 0.00   -    -    -    -    -    -    -  MPROB
+       0.51 0.75 0.47 0.00 0.00   -    -    -    -    -    -    -  S PRB
+       25.0 11.0 25.0 19.2 10.5   -    -    -    -    -    -    -  SIG LW
+       11.2  5.8 13.4 25.0  5.7   -    -    -    -    -    -    -  SIG UP
+       26.8 13.9 26.8 21.5 14.3   -    -    -    -    -    -    -  SNR LW
+       12.5  7.5 14.5 25.7  8.2   -    -    -    -    -    -    -  SNR UP
+        0.0  0.0  0.0  0.0  0.0   -    -    -    -    -    -    -  TGAIN
+        0.0  0.0  0.0  0.0  0.0   -    -    -    -    -    -    -  RGAIN
+         14   27   11 -104 -107   -    -    -    -    -    -    -  SNRxx
+     CCIR Coefficients        ~METHOD 30   VOACAP 16.1207W  PAGE   2
+ 
+  Nov    2026          SSN = 120.                Minimum Angle= 3.000 degrees
+  MM000001            MM000001RX            AZIMUTHS          N. MI.      KM
+  47.50 N  122.50 W - 51.50 N    0.10 W     34.16  322.46    4167.2   7717.0
+  XMTR  2-30 +  0.0 dBi[default\isotrope     ] Az=  0.0 OFFaz= 57.4   0.100kW
+  RCVR  2-30 +  0.0 dBi[default\isotrope     ] Az=  0.0 OFFaz=254.7
+  3 MHz NOISE = -145.0 dBW     REQ. REL = 90%    REQ. SNR = 13.0 dB
+  MULTIPATH POWER TOLERANCE =  3.0 dB   MULTIPATH DELAY TOLERANCE =  0.100 ms
+ 
+  23.0 13.2 14.1  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0 FREQ
+       F2F2 F2F2   -    -    -    -    -    -    -    -    -    -  MODE
+        3.0 32.9   -    -    -    -    -    -    -    -    -    -  TANGLE
+        3.0  4.9   -    -    -    -    -    -    -    -    -    -  RANGLE
+       27.1 28.1   -    -    -    -    -    -    -    -    -    -  DELAY
+        367  495   -    -    -    -    -    -    -    -    -    -  V HITE
+       0.50 0.41   -    -    -    -    -    -    -    -    -    -  MUFday
+        166  168   -    -    -    -    -    -    -    -    -    -  LOSS
+        -16  -18   -    -    -    -    -    -    -    -    -    -  DBU
+       -146 -148   -    -    -    -    -    -    -    -    -    -  S DBW
+       -163 -163   -    -    -    -    -    -    -    -    -    -  N DBW
+         17   15   -    -    -    -    -    -    -    -    -    -  SNR
+         23   25   -    -    -    -    -    -    -    -    -    -  RPWRG
+       0.57 0.54   -    -    -    -    -    -    -    -    -    -  REL
+       0.00 0.00   -    -    -    -    -    -    -    -    -    -  MPROB
+       0.26 0.24   -    -    -    -    -    -    -    -    -    -  S PRB
+       25.0 25.0   -    -    -    -    -    -    -    -    -    -  SIG LW
+       16.1 22.8   -    -    -    -    -    -    -    -    -    -  SIG UP
+       26.8 26.8   -    -    -    -    -    -    -    -    -    -  SNR LW
+       17.0 23.6   -    -    -    -    -    -    -    -    -    -  SNR UP
+        0.0  0.0   -    -    -    -    -    -    -    -    -    -  TGAIN
+        0.0  0.0   -    -    -    -    -    -    -    -    -    -  RGAIN
+        -10  -12   -    -    -    -    -    -    -    -    -    -  SNRxx
+     CCIR Coefficients        ~METHOD 30   VOACAP 16.1207W  PAGE   3
+ 
+  Nov    2026          SSN = 120.                Minimum Angle= 3.000 degrees
+  MM000002            MM000002RX            AZIMUTHS          N. MI.      KM
+  33.90 S  151.20 E - 40.70 N   74.00 W     65.66  265.97    8634.0  15988.9
+  XMTR  2-30 +  0.0 dBi[default\isotrope     ] Az=  0.0 OFFaz= 57.4   0.100kW
+  RCVR  2-30 +  0.0 dBi[default\isotrope     ] Az=  0.0 OFFaz=254.7
+  3 MHz NOISE = -145.0 dBW     REQ. REL = 90%    REQ. SNR = 13.0 dB
+  MULTIPATH POWER TOLERANCE =  3.0 dB   MULTIPATH DELAY TOLERANCE =  0.100 ms
+ 
+  24.0 30.1 14.1 10.1  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0  0.0 FREQ
+       NANA  EF2  EF2   -    -    -    -    -    -    -    -    -  MODE
+       99.9  3.0  3.0   -    -    -    -    -    -    -    -    -  TANGLE
+        3.0  8.0  8.0   -    -    -    -    -    -    -    -    -  RANGLE
+       99.9 54.8 54.7   -    -    -    -    -    -    -    -    -  DELAY
+       1000  169  165   -    -    -    -    -    -    -    -    -  V HITE
+       0.50 1.00 1.00   -    -    -    -    -    -    -    -    -  MUFday
+       1000  287  392   -    -    -    -    -    -    -    -    -  LOSS
+       -999 -137 -245   -    -    -    -    -    -    -    -    -  DBU
+       -999 -267 -372   -    -    -    -    -    -    -    -    -  S DBW
+       -173 -163 -158   -    -    -    -    -    -    -    -    -  N DBW
+       -999 -104 -214   -    -    -    -    -    -    -    -    -  SNR
+       -999  128  238   -    -    -    -    -    -    -    -    -  RPWRG
+       0.00 0.00 0.00   -    -    -    -    -    -    -    -    -  REL
+       0.00 0.00 0.00   -    -    -    -    -    -    -    -    -  MPROB
+       0.00 0.00 0.00   -    -    -    -    -    -    -    -    -  S PRB
+       25.0  5.6  5.6   -    -    -    -    -    -    -    -    -  SIG LW
+       25.0  4.7  4.7   -    -    -    -    -    -    -    -    -  SIG UP
+       26.8 11.0 10.7   -    -    -    -    -    -    -    -    -  SNR LW
+       25.7  7.1  6.9   -    -    -    -    -    -    -    -    -  SNR UP
+        0.0  0.0  0.0   -    -    -    -    -    -    -    -    -  TGAIN
+        0.0  0.0  0.0   -    -    -    -    -    -    -    -    -  RGAIN
+       -999 -115 -225   -    -    -    -    -    -    -    -    -  SNRxx
+ *****END OF RUN*****     VOACAP 16.1207W

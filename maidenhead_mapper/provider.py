@@ -16,6 +16,7 @@ from .algorithms.corridors_alg import SummarizeExchangesAlgorithm
 from .algorithms.corridors_time_alg import CorridorsOverTimeAlgorithm
 from .algorithms.propagation import SkipDistanceAlgorithm, SporadicEAlgorithm
 from .algorithms.research_export_alg import ResearchExportAlgorithm
+from .algorithms.voacap_alg import VoacapPathsAlgorithm
 from .algorithms.import_psk import ImportPskAlgorithm
 
 ICON = os.path.join(os.path.dirname(__file__), "icons", "icon.svg")
@@ -39,6 +40,7 @@ class MaidenheadProvider(QgsProcessingProvider):
         self.addAlgorithm(ImportAdifAlgorithm())
         self.addAlgorithm(FetchIonosphereAlgorithm())
         self.addAlgorithm(CheckPathsAlgorithm())
+        self.addAlgorithm(VoacapPathsAlgorithm())
         self.addAlgorithm(SporadicEAlgorithm())
         self.addAlgorithm(SkipDistanceAlgorithm())
         self.addAlgorithm(StationBalanceAlgorithm())
