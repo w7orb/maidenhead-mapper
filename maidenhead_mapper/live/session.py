@@ -49,6 +49,7 @@ class SessionStore:
         self.path = os.path.join(folder, f"wsjtx_session_{now:%Y%m%d_%H%M%S}.gpkg")
         self.written = 0
         self._log = None
+        self._log_created = False
 
     def make_layer(self, name, geometry, fields):
         """SyncedLayer.make_layer: a GeoPackage table instead of a memory layer."""
@@ -64,8 +65,9 @@ class SessionStore:
         if self.written >= len(log):
             return 0
         if self._log is None:
-            fields = _log_fields()
-            _write_empty(self.path, "log", "None", fields)
+            if not self._log_created:            # never overwrite a table written before close()
+                _write_empty(self.path, "log", "None", _log_fields())
+                self._log_created = True
             self._log = QgsVectorLayer(f"{self.path}|layername=log", "log", "ogr")
         fields = self._log.fields()
         feats = []
@@ -78,6 +80,12 @@ class SessionStore:
         if ok:
             self.written = len(log)
         return len(feats) if ok else 0
+
+    def close(self):
+        """Release the open log table. It is a layer owned by Python, not the
+        project; if it outlives QGIS's data providers, QGIS crashes on exit.
+        append_log() reopens it (without overwriting) if needed."""
+        self._log = None
 
 
 def log_props(layer, tag=True):

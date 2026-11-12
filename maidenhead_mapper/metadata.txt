@@ -12,7 +12,7 @@ about=For amateur (ham) radio operators.
     Predict paths with VOACAP: runs your installed VOACAP (not included) on exchanges and corridors and adds its MUF, mode, REL and SNR, and the gap between what was heard and what it predicts.
     Export research dataset: one CSV row per observed SNR from ALL.TXT (exchange reports and your decodes, with path, control points, day/night, basic MUF and a sporadic-E flag, plus rows for answers that weren't decoded), optionally pseudonymised, for sharing with other operators and researchers.
     No extra Python packages needed.
-version=0.15.0
+version=0.15.1
 author=Cody Tews
 email=w7orb.radio@gmail.com
 homepage=https://github.com/w7orb/maidenhead-mapper
@@ -25,6 +25,9 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.15.1
+    - Fix: QGIS crashed on exit while the WSJT-X live map was running and saving a session. The session's log table is now released when QGIS quits, the plugin unloads or Stop is pressed; Start again reopens it without overwriting
+    - Tests: QGIS exit check (separate process) for both exit orders
     0.15.0
     - Export research dataset: schema 1.1. New columns at the end: muf_basic_mhz (the path's basic MUF at the row's time from the CCIR monthly-median model, as Check paths computes it), f_over_muf, es_candidate (the sporadic-E detector's high-confidence rule) and foes_min_mhz; new not_decoded rows for an answer a station evidently missed (it sent the same message again in its next slot), with no SNR and censored = 1. Options to skip the MUF and to give R12. 1.0 columns and rows are unchanged
     - Tests: MUF against the CCIR model, Es flag, not_decoded rules, column order; QGIS smoke checks for Check paths and the new columns

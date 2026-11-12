@@ -269,6 +269,18 @@ def main():
             tdock.discover = real_discover
     check("activity timeline after a layer is added", timeline_refresh)
 
+    def live_exit():
+        # QGIS crashed on exit while the live map was saving a session (the open
+        # log table outlived QGIS's providers). The crash happens as a process
+        # ends, so run the scenario in its own process, both exit orders.
+        import subprocess
+        for mode in ("quit", "unload"):
+            r = subprocess.run([sys.executable, os.path.join(HERE, "qgis_live_exit.py"), mode],
+                               capture_output=True, text=True, timeout=300)
+            assert r.returncode == 0 and "OK " + mode in r.stdout, (mode, r.returncode, r.stdout[-500:],
+                                                                   r.stderr[-1500:])
+    check("live map: QGIS exits cleanly while saving a session", live_exit)
+
     def research_export():
         import csv
         import json

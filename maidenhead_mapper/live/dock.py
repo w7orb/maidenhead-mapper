@@ -5,7 +5,7 @@ import json
 import uuid
 import weakref
 
-from qgis.core import QgsSettings
+from qgis.core import QgsApplication, QgsSettings
 from qgis.gui import QgsFileWidget
 from qgis.PyQt.QtCore import Qt, QTimer
 from qgis.PyQt.QtWidgets import (
@@ -64,6 +64,11 @@ class LiveController:
         self.fader.timeout.connect(self.exchange_layer.repaint)
         self.decode_times = []
         self.on_update = None  # callback for the dock's status
+        # QGIS may exit without unloading plugins: release everything while
+        # its providers still exist (see shutdown()).
+        app = QgsApplication.instance()
+        if app is not None:
+            app.aboutToQuit.connect(self.shutdown)
 
     def _new_group(self):
         CONTROLLERS.pop(self.group, None)
@@ -112,6 +117,24 @@ class LiveController:
         self.batch.stop()
         self.fader.stop()
         self.flush()
+        if self.store is not None:
+            self.store.close()
+
+    def shutdown(self):
+        """QGIS is closing or the plugin is unloading: stop listening, save the
+        rest of the log and release the session file. Unlike stop() this never
+        creates layers (the project may already be cleared). Safe to call twice."""
+        self.listener.stop()
+        self.batch.stop()
+        self.fader.stop()
+        if self.store is not None:
+            try:
+                self.store.append_log(self.model.log)
+            except Exception:  # disk full, file locked...: nothing more to do at exit
+                pass
+            self.store.close()
+        for lyr in self._layers():
+            lyr.detach()
 
     def _on_message(self, msg):
         now = _dt.datetime.now(_dt.timezone.utc)
@@ -292,4 +315,4 @@ class LiveDock(QDockWidget):
         self.status.setText("<br>".join(lines))
 
     def shutdown(self):
-        self.ctl.stop()
+        self.ctl.shutdown()
