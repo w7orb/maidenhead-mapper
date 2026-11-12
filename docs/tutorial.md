@@ -34,6 +34,9 @@ If a term is new, the [user guide's glossary](user-guide.md#4-words-used-in-this
 1. *Plugins → Maidenhead Mapper → Grid → Create Maidenhead grid…*
 2. Leave everything as it is and click **Run**.
 
+![Create Maidenhead grid dialog](images/dlg_create_grid.png)
+*The Create Maidenhead grid dialog. The defaults are fine.*
+
 **You should see** two new layers, *Maidenhead fields* (324 cells, labelled `AA`–`RR`) and *Maidenhead squares* (32,400 cells). Zoom in over your area: squares and their labels (e.g. `FN31`) appear once you're closer than about 1:20,000,000.
 
 ![World map covered by labelled Maidenhead fields](images/res_grid_world.png)
@@ -58,6 +61,8 @@ The standard map splits the Pacific at its edges. For a station in the Americas,
 
 **You should see** the world redrawn with the Americas in the middle. Equal Earth keeps areas true, so Europe and Japan don't look bigger than they are.
 
+The world map in step 1b already uses this projection, with `-120`.
+
 `-120` is about the US West Coast. Use a value near your own longitude: about `-100` for the central US, `-75` for the east coast, `0` for Europe, `140` for Japan or Australia. Your data isn't changed; only the drawing is.
 
 ---
@@ -73,6 +78,9 @@ PSK Reporter collects reception reports from receivers worldwide. You'll downloa
 3. **Callsign**: `N0CALL`. **Hours back**: `24`. **Save into folder**: your new folder.
 4. Click **Run**.
 
+![Fetch from PSK Reporter dialog with callsign, hours, folder and style](images/dlg_fetch_psk.png)
+*The Fetch from PSK Reporter dialog.*
+
 **You should see** a log line like *Saved 1,234 report(s) to …psk_2026_11_12-18_05_00.json*, and a layer *PSK Reporter stations* with one dot per station. The dots are coloured by best SNR: purple is weak, yellow is strong.
 
 **Asking again within 5 minutes is refused.** PSK Reporter asks every client for that, and the tool tells you how long to wait. Fetch into the same folder every few hours to build a longer history; overlapping reports are counted once.
@@ -83,6 +91,9 @@ PSK Reporter collects reception reports from receivers worldwide. You'll downloa
 2. **Folder**: the same folder. **My callsign**: `N0CALL`. **My grid**: `FN31pr` (or leave it empty to use the grid PSK Reporter has for you).
 3. **Direction**: *Stations that heard me*. **Style**: *Band*.
 4. Click **Run**.
+
+![Import PSK Reporter reports dialog](images/dlg_import_psk.png)
+*The Import PSK Reporter reports dialog. Set **Direction** and **Style** further down.*
 
 **You should see** only the stations that decoded **you**, coloured by band.
 
@@ -113,12 +124,21 @@ To restyle, open *Layer Properties → Symbology*. Callsign labels appear when y
 4. Optional: set **From** and **To** to an evening you operated, to keep it quick.
 5. Click **Run**.
 
+![Import WSJT-X ALL.TXT dialog](images/dlg_import_alltxt.png)
+*The Import WSJT-X ALL.TXT dialog.*
+
 **You should see** two layers:
 
 - **WSJT-X stations (ALL.TXT)**: one dot per station decoded, coloured by best SNR. ALL.TXT doesn't record which QSOs you logged, so there are no "worked" stars here; step 3c adds those from your log.
 - **WSJT-X exchanges (ALL.TXT)**: lines between pairs of stations that worked each other, **including QSOs that didn't involve you**.
 
 The log reports how many stations were placed, and how many never sent a grid (those can't be drawn).
+
+![World map of decoded stations coloured by best SNR](images/res_alltxt_stations.png)
+*The stations layer: 60 of the 1,351 stations decoded in one day, coloured by best SNR (purple weak, yellow strong).*
+
+![Great-circle exchange lines between other stations across North America, to Japan and South America](images/res_alltxt_exchanges.png)
+*The exchanges layer: 40 exchanges with both reports in one hour. None of them involve the station that decoded them.*
 
 ### 3b. Read the exchanges layer
 
@@ -148,12 +168,18 @@ FT8 reports say how the sender hears the addressee. When you decode both sides o
 2. **ADIF file(s)**: `wsjtx_log.adi` from the same folder as `ALL.TXT`, and/or a log exported from your logger. If you have a LoTW download, add it too.
 3. Click **Run**.
 
+![Import ADIF log dialog](images/dlg_import_adif.png)
+*The Import ADIF log dialog.*
+
 **You should see**:
 
 - **Worked stations (ADIF)**: one dot per callsign you've worked, coloured by band;
 - **QSOs (ADIF)**: one line per QSO from your grid.
 
 If you added LoTW, the log reports how many duplicates were merged, and `confirmed` shows which QSOs are confirmed.
+
+![QSO lines from the Pacific Northwest to Japan, Australia and the US east coast, with worked-station points](images/res_adif.png)
+*A 4-QSO sample log, one QSO merged with its LoTW confirmation, coloured by band.*
 
 **What this tells you**: your whole logging history on one map, not just the period `ALL.TXT` covers. A filter such as `"confirmed" IS NULL` (right-click → *Filter…*) shows QSOs still waiting for a confirmation.
 
@@ -165,6 +191,9 @@ If you added LoTW, the log reports how many duplicates were merged, and `confirm
 2. In its drop-down, choose your ALL.TXT import.
 
 **You should see** bars of decodes per UTC hour: blue for all decodes, orange for decodes addressed to you.
+
+![Activity timeline panel with an hourly bar chart and a summary below](images/dock_timeline.png)
+*The Activity timeline for one day's ALL.TXT import, with a few hours chosen.*
 
 3. **Drag** across a few hours. The map changes as you drag: the stations and exchanges layers now show only those hours. Their counts and SNR describe just that window, and the layer names show the times.
 4. Use **◀ ▶** to step the window through the evening. **All hours** brings everything back.
@@ -225,6 +254,9 @@ With saving on, the session is written every 2 seconds to `wsjtx_session_YYYYMMD
 
 The MUF(3000) is the highest frequency a 3,000 km hop can use at that place. Where the contours are above 28 MHz, 10m is open for long hops from there.
 
+![World map of ionosonde stations with MUF(3000) contour lines](images/res_kc2g.png)
+*KC2G ionosondes and MUF(3000)F2 contours in MHz.*
+
 This is KC2G's **current** data only. There is no history.
 
 ### 6b. Check your paths
@@ -233,6 +265,9 @@ This is KC2G's **current** data only. There is no history.
 2. **Station or exchange layer**: your live exchanges, or the ALL.TXT exchanges from step 3.
 3. **Ionosphere source**: *Auto*. Recent paths use KC2G; older ones use the CCIR model, a monthly-median model that the first run downloads (about 0.5 MB).
 4. Click **Run**.
+
+![Check paths against the ionosphere dialog](images/dlg_check_paths.png)
+*The Check paths dialog.*
 
 **You should see** a copy of the layer coloured by `f2_status`:
 
@@ -244,6 +279,9 @@ You also get a **reflection points** layer:
 
 - grey dots where each hop meets the layer;
 - diamonds where the MUF is judged (green if the band fits, red if not).
+
+![Green and red great-circle paths with reflection points over MUF contours](images/res_check_paths.png)
+*20 paths the F2 layer supports (green) and 20 above the F2 MUF (red), with their reflection points over the MUF(3000) contours.*
 
 **What this tells you**: `muf_mhz`, `hmf2_km`, `hops_iono` and `takeoff_iono` give each path's likely geometry. Be careful with the red paths:
 
@@ -275,6 +313,9 @@ If nothing is found, that's normal outside the sporadic-E season or on lower ban
 
 **What this tells you**: the skip zone grows when the ionosphere weakens (evening on the high bands) and shrinks when it strengthens. `fof2_est_mhz` is an indicator for comparing hours, not a measurement.
 
+![Table of band, hour, contact counts, skip edge, distances and foF2 values](images/res_skip_table.png)
+*Skip distance by hour for one day's ALL.TXT. An hour with fewer than 20 contacts gets no skip edge.*
+
 ---
 
 ## Step 7. Station balance: loud but deaf? (5 minutes, and lots of data)
@@ -283,12 +324,18 @@ If nothing is found, that's normal outside the sporadic-E season or on lower ban
 2. **Exchange layer(s)**: your live exchanges and/or ALL.TXT exchanges. You can add ADIF QSOs too. Keep **Separately per band** ticked.
 3. Click **Run**.
 
+![Station balance dialog](images/dlg_station_balance.png)
+*The Station balance dialog.*
+
 **You should see** stations coloured by **verdict**:
 
 - red, *loud but deaf*: they're heard better than they hear;
 - green, *balanced*;
 - blue, *good ears*: they hear better than they're heard;
 - grey, *uncertain*.
+
+![Map of stations in North America, Europe and the Caribbean coloured by verdict](images/res_balance.png)
+*The 60 stations with the most exchanges in one day's ALL.TXT. One day is far less data than recommended, so treat this as an illustration; with version 0.9.3 and later more of these come out *uncertain*.*
 
 **What this tells you**: in an exchange, both directions share the same path and the same antennas. The difference between the two reports is therefore down to one station's power and receiver noise against the other's. A "loud but deaf" station probably runs high power, a noisy receive location, or both.
 
@@ -307,12 +354,18 @@ If you have two antennas, you can compare them with no test equipment.
 3. Leave them running: a few hours at least, ideally day and night.
 4. *WSJT-X → Antenna A/B comparison…*. Give receiver A's and B's `ALL.TXT` files, or the session layer. Click **Run**.
 
+![Antenna A/B comparison dialog with receiver A and B files](images/dlg_antenna_compare.png)
+*The Antenna A/B comparison dialog.*
+
 **You should see** 16 wedges around your grid:
 
 - green where antenna A is stronger, purple where B is;
 - each labelled with the median difference, the number of pairs, and `+only A/only B` decodes.
 
 A table breaks the results down by distance and by takeoff angle.
+
+![Direction wedges around the Pacific Northwest, green to the north-west and purple to the north](images/res_antenna.png)
+*A vertical (A) against a loop (B), from about 75 minutes of recordings.*
 
 **What this tells you**: when both receivers decode the same message in the same slot, everything but the antennas (and a fixed receiver offset) is identical. The wedges are therefore a **relative** pattern by direction.
 
