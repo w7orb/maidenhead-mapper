@@ -138,7 +138,7 @@ The log reports how many stations were placed, and how many never sent a grid (t
 *The stations layer: 60 of the 1,351 stations decoded in one day, coloured by best SNR (purple weak, yellow strong).*
 
 ![Great-circle exchange lines between other stations across North America, to Japan and South America](images/res_alltxt_exchanges.png)
-*The exchanges layer: 40 exchanges with both reports in one hour. None of them involve the station that decoded them.*
+*The exchanges layer: 40 exchanges with both reports in one hour, mostly between other stations. Green = confirmed, blue = both reports.*
 
 ### 3b. Read the exchanges layer
 
