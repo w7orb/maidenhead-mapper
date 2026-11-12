@@ -162,6 +162,8 @@ Takeoff angle is estimated, never measured. By default it uses the F2 layer heig
 
 Below the decode floor the weaker antenna reports nothing rather than a low SNR, so read `decode_adv` (only A − only B, over all decodes) next to the median. In the 2022 DXCommander/loop recordings the median at 10–15° takeoff is about even, but the loop got 222 decodes the vertical missed against 81 the other way (152 vs 42 with the fixed 300 km layer). The result is a relative pattern; trust bins with ~100 pairs or more.
 
+**Reference-antenna mode**: make B a simple antenna you can model (say a dipole at a known height) and give its pattern, either a CSV of `azimuth_deg, elevation_deg, gain_dbi` or a 4nec2 / NEC-2 output file, plus the compass bearing its azimuth 0 (+X) points to. Each pair then gets B's modelled gain at the station's bearing and estimated takeoff angle (`ref_gain_dbi`), and A's gain in dBi = that + A − B (`abs_gain_dbi`). The bins add `abs_dbi` with a 95% interval and `abs_n`. Only as good as the model, the takeoff estimate and the receivers' match; decodes one antenna missed still only count, so read `decode_adv` too.
+
 ### Export research dataset (WSJT-X)
 
 Writes ALL.TXT decodes as a CSV with one row per observed SNR, for merging with other operators' data and sharing (e.g. HamSCI, Zenodo): the reports stations sent each other in exchanges and your own decodes, linked by `exchange_id`, with distance, bearing, fewest hops, control points, day/night there and a censored flag. Callsigns are kept as sent on the air; pseudonymising them (salted SHA-256) is an option, off by default. A `.schema.json` next to the CSV describes every field; see [docs/research-export-schema.md](docs/research-export-schema.md).

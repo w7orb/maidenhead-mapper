@@ -18,6 +18,7 @@ from qgis.core import (
     QgsProcessingException,
     QgsProcessingParameterEnum,
     QgsProcessingParameterFeatureSink,
+    QgsProcessingParameterFile,
     QgsProcessingParameterMultipleLayers,
     QgsProcessingParameterNumber,
     QgsProcessingParameterString,
@@ -32,6 +33,7 @@ from qgis.PyQt.QtCore import QCoreApplication
 from qgis.PyQt.QtGui import QColor
 
 from ..core import alltxt, antenna
+from ..core import antenna_pattern as ap
 from ..core import maidenhead as mh
 from . import styling
 from .import_psk import WGS84
@@ -47,6 +49,7 @@ CLASSES = [(-99, -6, "#5e3c99", "B ≥ 6 dB better"), (-6, -2, "#b2abd2", "B 2�
 SOURCES = ["Ionosphere: KC2G when recent, else the CCIR model", "Ionosphere: CCIR model only",
            "Fixed 300 km layer (geometric)"]
 SRC_AUTO, SRC_MODEL, SRC_FIXED = 0, 1, 2
+SIDES = ["A", "B"]
 
 
 def _graduated(attr, geometry):
@@ -84,6 +87,10 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
     SECTORS = "SECTORS"
     STATIONS = "STATIONS"
     TABLE = "TABLE"
+    REFERENCE_PATTERN = "REFERENCE_PATTERN"
+    REFERENCE_SIDE = "REFERENCE_SIDE"
+    ORIENTATION_DEG = "ORIENTATION_DEG"
+    DECODES = "DECODES"
 
     def tr(self, text):
         return QCoreApplication.translate("AntennaCompareAlgorithm", text)
@@ -127,7 +134,16 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
             "takeoff_min/max_deg show the range. Expect ±1–2° from layer-height error, and a path may "
             "really be using more hops than the fewest.\n\n"
             "The pattern is relative (A versus B), not absolute gain. Fading makes single pairs noisy: "
-            "trust bins with ~100 pairs or more.")
+            "trust bins with ~100 pairs or more.\n\n"
+            "Reference antenna (optional): give a modelled pattern for one antenna (usually B, a simple "
+            "dipole at a known height): a CSV of azimuth_deg, elevation_deg, gain_dbi, or a NEC-2 / 4nec2 "
+            ".out file. Orientation is the compass bearing of the pattern's azimuth 0 (the model's +X "
+            "axis). Each pair then gets the reference's modelled gain at the station's bearing and the "
+            "estimated takeoff angle (ref_gain_dbi), and the other antenna's absolute gain = reference "
+            "gain + its measured difference (abs_gain_dbi). Bins add abs_dbi (median), abs_lo_dbi and "
+            "abs_hi_dbi (95% interval of that median), abs_n and ref_dbi. Only pairs carry absolute "
+            "values; decodes one antenna missed are counted as before, so read decode_adv too. The "
+            "result is only as good as the model, the takeoff estimate and the receivers' match.")
 
     def initAlgorithm(self, config=None):  # noqa: N802
         self.addParameter(QgsProcessingParameterMultipleLayers(
@@ -148,6 +164,15 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterNumber(
             self.R12, self.tr("Sunspot number R12 for the model (0 = look it up)"),
             QgsProcessingParameterNumber.Double, defaultValue=0.0, minValue=0.0, maxValue=400.0))
+        self.addParameter(QgsProcessingParameterFile(
+            self.REFERENCE_PATTERN, self.tr("Reference antenna pattern (CSV or NEC-2 .out; optional)"),
+            optional=True, fileFilter="Antenna patterns (*.csv *.txt *.out *.tsv);;All files (*.*)"))
+        self.addParameter(QgsProcessingParameterEnum(
+            self.REFERENCE_SIDE, self.tr("Reference pattern is antenna"), options=SIDES, defaultValue=1))
+        self.addParameter(QgsProcessingParameterNumber(
+            self.ORIENTATION_DEG,
+            self.tr("Reference orientation: compass bearing of the pattern's azimuth 0 / +X (°)"),
+            QgsProcessingParameterNumber.Double, defaultValue=0.0, minValue=-360.0, maxValue=360.0))
         self.addParameter(QgsProcessingParameterNumber(
             self.RADIUS, self.tr("Wedge radius on the map (km)"), QgsProcessingParameterNumber.Double,
             defaultValue=2500.0, minValue=100.0, maxValue=15000.0))
@@ -159,6 +184,9 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.TABLE, self.tr("Antenna A/B by distance and takeoff"), QgsProcessing.TypeVector,
             optional=True, createByDefault=True))
+        self.addParameter(QgsProcessingParameterFeatureSink(
+            self.DECODES, self.tr("Antenna A/B matched decodes"), QgsProcessing.TypeVector,
+            optional=True, createByDefault=False))
 
     # -- inputs ------------------------------------------------------------------
     def _from_session(self, layer, parameters, context, feedback):
@@ -231,9 +259,10 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
         feedback.pushInfo(self.tr("A ({}): {:,} decodes; B ({}): {:,} decodes; my grid {}").format(
             label_a, len(da), label_b, len(db), grid))
 
+        reference, side = self._reference(parameters, context, feedback)
         matches = antenna.match(da, db)
         angle_at, notes = self._angle_source(parameters, context, feedback, matches)
-        c = antenna.compare(matches, antenna.learn_grids(da, db), grid, angle_at)
+        c = antenna.compare(matches, antenna.learn_grids(da, db), grid, angle_at, reference, side)
         for note, n in notes.items():
             feedback.pushWarning(self.tr("{:,} station-slot(s) used the fixed 300 km layer: {}").format(n, note))
         t = c.total
@@ -253,19 +282,41 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
         if c.unplaced:
             feedback.pushInfo(self.tr("{:,} decode(s) from stations that never sent a grid are in the totals "
                                       "but not the direction/distance bins").format(c.unplaced))
+        if reference is not None:
+            other = "A" if side == "B" else "B"
+            for why, n in c.ref_notes.items():
+                feedback.pushWarning(self.tr("{:,} pair(s) have no reference gain: {}").format(n, why))
+            ci = t.abs_ci_dbi
+            feedback.pushInfo(self.tr("Antenna {} absolute gain (reference {}): median {} dBi{} over {:,} pairs; "
+                                      "reference median {} dBi").format(
+                other, side, "—" if t.median_abs_dbi is None else f"{t.median_abs_dbi:+.1f}",
+                f" (95% {ci[0]:+.1f} to {ci[1]:+.1f})" if ci else "", t.abs_n,
+                "—" if t.median_ref_dbi is None else f"{t.median_ref_dbi:+.1f}"))
+            for b in c.by_takeoff.values():
+                if b.abs_n:
+                    feedback.pushInfo("  {:<14} {} {:+.1f} dBi over {:,} pairs".format(
+                        b.label, other, b.median_abs_dbi, b.abs_n))
 
         def stats_fields():
             fs = QgsFields()
             for name, kind in (("n_both", INT), ("only_a", INT), ("only_b", INT), ("median_db", DOUBLE),
                                ("iqr_lo_db", DOUBLE), ("iqr_hi_db", DOUBLE), ("decode_adv", DOUBLE)):
                 fs.append(field(name, kind, 0))
+            if reference is not None:
+                for name, kind in (("abs_n", INT), ("abs_dbi", DOUBLE), ("abs_lo_dbi", DOUBLE),
+                                   ("abs_hi_dbi", DOUBLE), ("ref_dbi", DOUBLE)):
+                    fs.append(field(name, kind, 0))
             return fs
 
         def stats(b):
             iqr = b.iqr_db or (None, None)
             adv = b.decode_advantage
-            return [b.n_both, b.only_a, b.only_b, b.median_db, iqr[0], iqr[1],
-                    None if adv is None else round(adv, 3)]
+            out = [b.n_both, b.only_a, b.only_b, b.median_db, iqr[0], iqr[1],
+                   None if adv is None else round(adv, 3)]
+            if reference is not None:
+                ci = b.abs_ci_dbi or (None, None)
+                out += [b.abs_n, b.median_abs_dbi, ci[0], ci[1], b.median_ref_dbi]
+            return out
 
         # direction wedges
         sf = QgsFields()
@@ -337,4 +388,47 @@ class AntennaCompareAlgorithm(QgsProcessingAlgorithm):
                 feat.setAttributes([by, b.label] + stats(b))
                 tsink.addFeature(feat, QgsFeatureSink.FastInsert)
             results[self.TABLE] = tdest
+
+        # one row per decode from a station with a grid (pairs and singles)
+        df = QgsFields()
+        cols = [("utc", STRING), ("call", STRING), ("mhz", DOUBLE), ("snr_a", INT), ("snr_b", INT),
+                ("diff_db", INT), ("distance_km", DOUBLE), ("bearing_deg", DOUBLE), ("takeoff_deg", DOUBLE),
+                ("prop_mode", STRING)]
+        if reference is not None:
+            cols += [("ref_gain_dbi", DOUBLE), ("abs_gain_dbi", DOUBLE)]
+        for name, kind in cols:
+            df.append(field(name, kind, 0))
+        dsink, ddest = self.parameterAsSink(parameters, self.DECODES, context, df, QgsWkbTypes.NoGeometry)
+        if dsink is not None:
+            for r in c.decodes:
+                slot = r["slot"]
+                utc = slot.strftime("%Y-%m-%d %H:%M:%S") if isinstance(slot, _dt.datetime) else str(slot)
+                vals = [utc, r["sender"], r["mhz"], r["snr_a"], r["snr_b"], r["diff_db"], r["distance_km"],
+                        r["bearing_deg"], r["takeoff_deg"], r["mode"]]
+                if reference is not None:
+                    vals += [r["ref_gain_dbi"], r["abs_gain_dbi"]]
+                feat = QgsFeature(df)
+                feat.setAttributes(vals)
+                dsink.addFeature(feat, QgsFeatureSink.FastInsert)
+            results[self.DECODES] = ddest
         return results
+
+    def _reference(self, parameters, context, feedback):
+        """(PatternSet or None, "A"/"B") from the reference parameters."""
+        path = self.parameterAsFile(parameters, self.REFERENCE_PATTERN, context)
+        side = SIDES[self.parameterAsEnum(parameters, self.REFERENCE_SIDE, context)]
+        if not path:
+            return None, side
+        orient = self.parameterAsDouble(parameters, self.ORIENTATION_DEG, context)
+        try:
+            ref = ap.read_pattern(path, orient)
+        except ap.PatternError as exc:
+            raise QgsProcessingException(self.tr("Reference pattern: {}").format(exc)) from None
+        for p in ref.patterns:
+            feedback.pushInfo(self.tr("Reference pattern ({}, antenna {}): {}{} azimuths × {} elevations "
+                                      "({:g}–{:g}°), max {:+.1f} dBi; azimuth 0 points to {:g}°").format(
+                ref.kind, side, f"{p.mhz:g} MHz, " if p.mhz else "", len(p.azimuths), len(p.elevations),
+                p.elevations[0], p.elevations[-1], p.max_dbi, ref.orientation_deg))
+        for w in ref.warnings:
+            feedback.pushWarning(self.tr("Reference pattern: {}").format(w))
+        return ref, side

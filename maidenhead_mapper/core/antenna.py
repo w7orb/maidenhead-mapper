@@ -35,6 +35,21 @@ The angle is worked out per sender and 15-minute slot, not per station: the
 same station is heard at different angles as hmF2 rises and falls through the
 day, which is what eventually lets an elevation pattern be separated from
 distance (TODO 15).
+
+Reference-antenna mode (TODO 16): give compare() a modelled pattern
+(core.antenna_pattern.PatternSet) for one of the antennas. Each matched decode
+then gets ref_gain_dbi, the reference's modelled gain towards the sender's
+bearing at that decode's estimated takeoff angle, and abs_gain_dbi, the other
+antenna's estimated gain:
+
+    reference B:  abs_gain_dbi = ref_gain_dbi + (A - B)
+    reference A:  abs_gain_dbi = ref_gain_dbi - (A - B)
+
+The bins add the median, a 95 % confidence interval for that median, and n.
+Only pairs carry an absolute value. Decodes one antenna missed stay counts,
+as before, so where the measured antenna misses many decodes its median is
+too high (only its stronger decodes are paired), and too low where the
+reference misses many.
 """
 
 import math
@@ -88,6 +103,29 @@ class Bin:
     only_a: int = 0
     only_b: int = 0
     diffs: List[int] = field(default_factory=list)
+    abs_gains: List[float] = field(default_factory=list)    # reference mode: the other antenna's dBi
+    ref_gains: List[float] = field(default_factory=list)    # reference mode: the reference's modelled dBi
+
+    @property
+    def abs_n(self):
+        return len(self.abs_gains)
+
+    @property
+    def median_abs_dbi(self):
+        return round(statistics.median(self.abs_gains), 1) if self.abs_gains else None
+
+    @property
+    def abs_ci_dbi(self):
+        """95 % confidence interval of median_abs_dbi (needs 6+ values)."""
+        return median_ci(self.abs_gains)
+
+    @property
+    def median_ref_dbi(self):
+        return round(statistics.median(self.ref_gains), 1) if self.ref_gains else None
+
+    def add_abs(self, ref_dbi, abs_dbi):
+        self.ref_gains.append(ref_dbi)
+        self.abs_gains.append(abs_dbi)
 
     @property
     def median_db(self):
@@ -113,6 +151,17 @@ class Bin:
             self.only_a += 1
         else:
             self.only_b += 1
+
+
+def median_ci(values, z=1.96):
+    """Distribution-free confidence interval of the median from order
+    statistics (about 95 % for z = 1.96); None for fewer than 6 values."""
+    n = len(values)
+    if n < 6:
+        return None
+    x = sorted(values)
+    k = max(int(math.floor((n - z * math.sqrt(n)) / 2.0)), 0)
+    return round(x[k], 1), round(x[n - 1 - k], 1)
 
 
 def match(decodes_a, decodes_b):
@@ -229,16 +278,31 @@ class Comparison:
     unplaced: int
     methods: Dict[str, int] = field(default_factory=dict)   # matches per angle method
     modes: Dict[str, int] = field(default_factory=dict)     # matches per propagation mode
+    decodes: List[dict] = field(default_factory=list)       # one per placed match (see compare)
+    reference_side: Optional[str] = None                    # "A" or "B" in reference mode
+    ref_notes: Dict[str, int] = field(default_factory=dict)  # pairs with no reference gain, by reason
 
 
-def compare(matches, grids, my_grid, angle_at=None):
+def compare(matches, grids, my_grid, angle_at=None, reference=None, reference_side="B"):
     """Bin matched decodes by the sender's direction, distance and takeoff from my_grid.
 
     angle_at(lon1, lat1, lon2, lat2, distance_km, when, mhz) -> Angle; default
     geometric_angle. It is called once per sender, 15-minute slot and frequency.
     placed[call] gets the median takeoff over its decodes (and min/max), the
-    old fixed-300 km value (takeoff_300_deg), hops, hmF2, method and mode."""
+    old fixed-300 km value (takeoff_300_deg), hops, hmF2, method and mode.
+
+    reference: a PatternSet (core.antenna_pattern) for antenna reference_side
+    ("A" or "B"). Then pairs get ref_gain_dbi / abs_gain_dbi in decodes and
+    every bin collects them. decodes holds one dict per placed match: sender,
+    slot, mhz, snr_a, snr_b, diff_db, distance_km, bearing_deg, takeoff_deg,
+    mode, and ref_gain_dbi / abs_gain_dbi (None without a reference, for
+    single decodes, or where the pattern has no value)."""
     angle_at = angle_at or geometric_angle
+    side = (reference_side or "B").strip().upper()
+    if reference is not None and side not in ("A", "B"):
+        raise ValueError("reference_side must be A or B")
+    sign = 1 if side == "B" else -1
+    rows, ref_notes = [], defaultdict(int)
     total = Bin("all")
     sec = {k: Bin(COMPASS[k]) for k in range(SECTORS)}
     dist, take, stations = {}, {}, {}
@@ -269,11 +333,28 @@ def compare(matches, grids, my_grid, angle_at=None):
         sec[_sector(info["bearing_deg"])].add(m)
         dl = _band_label(DIST_EDGES, info["distance_km"], "km")
         dist.setdefault(dl, Bin(dl)).add(m)
+        tb = None
         if a.mode == MODE_ES:
-            take.setdefault(ES_BIN, Bin(ES_BIN)).add(m)
+            tb = take.setdefault(ES_BIN, Bin(ES_BIN))
         elif a.takeoff_deg is not None:
             tl = _band_label(TAKEOFF_EDGES, a.takeoff_deg, "°")
-            take.setdefault(tl, Bin(tl)).add(m)
+            tb = take.setdefault(tl, Bin(tl))
+        if tb is not None:
+            tb.add(m)
+        ref = absg = None
+        if reference is not None and m.diff is not None:
+            ref, why = reference.lookup(info["bearing_deg"], a.takeoff_deg, m.mhz)
+            if ref is None:
+                ref_notes[why] += 1
+            else:
+                ref = round(ref, 2)
+                absg = round(ref + sign * m.diff, 2)
+                for b_ in (total, stations[m.sender], sec[_sector(info["bearing_deg"])], dist[dl], tb):
+                    if b_ is not None:
+                        b_.add_abs(ref, absg)
+        rows.append({"sender": m.sender, "slot": m.slot, "mhz": m.mhz, "snr_a": m.snr_a, "snr_b": m.snr_b,
+                     "diff_db": m.diff, "distance_km": info["distance_km"], "bearing_deg": info["bearing_deg"],
+                     "takeoff_deg": a.takeoff_deg, "mode": a.mode, "ref_gain_dbi": ref, "abs_gain_dbi": absg})
     for call, info in placed.items():
         al = per_station.get(call) or []
         ts = [a.takeoff_deg for a in al if a.takeoff_deg is not None]
@@ -289,7 +370,8 @@ def compare(matches, grids, my_grid, angle_at=None):
                            for i, lo in enumerate(edges)}
     dist = dict(sorted(dist.items(), key=lambda kv: order(DIST_EDGES).get(kv[0], 99)))
     take = dict(sorted(take.items(), key=lambda kv: order(TAKEOFF_EDGES).get(kv[0], 99)))
-    return Comparison(total, sec, dist, take, stations, placed, unplaced, dict(methods), dict(modes))
+    return Comparison(total, sec, dist, take, stations, placed, unplaced, dict(methods), dict(modes),
+                      rows, side if reference is not None else None, dict(ref_notes))
 
 
 def decodes_from_rows(rows):
