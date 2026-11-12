@@ -65,7 +65,7 @@ Everything is under *Plugins → Maidenhead Mapper*, and under the Maidenhead Ma
 |---|---|
 | Grid | Create Maidenhead grid… |
 | PSK Reporter | Fetch from PSK Reporter…, Import PSK Reporter reports… |
-| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT…, Import ADIF log (.adi / .adx)…, Summarize exchanges by grid pair…, Propagation over time (panel), Station balance from two-way reports…, Antenna A/B comparison… |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT…, Import ADIF log (.adi / .adx)…, Summarize exchanges by grid pair…, Propagation over time (panel), Station balance from two-way reports…, Antenna A/B comparison…, Export research dataset… |
 | Ionosphere | Fetch ionosphere (KC2G)…, Check paths against the ionosphere (MUF)…, Find sporadic-E paths…, Skip distance by hour… |
 | (top level) | Activity timeline (panel) |
 
@@ -94,6 +94,8 @@ Every tool is also in the **Processing Toolbox** (*Processing → Toolbox*) unde
 | **Corridor** | All the exchanges between two grid cells (on one band, or in one time frame), drawn as one line with medians of the reports each way. |
 | **Frame** | One step of an animation: an hour, 3 hours or a day. A time-enabled layer shows only the features of the current frame. |
 | **Temporal Controller** | QGIS's built-in time slider (*View → Panels → Temporal Controller*). It plays time-enabled layers frame by frame. |
+| **Research export** | A table with one row per observed SNR (who transmitted, who received, when, on which band, and the path), for merging with other operators' data and for propagation research. See [7.8](#78-export-research-dataset). |
+| **Censored** | A value known only to be at or below a limit. FT8 reports stop near −24 dB, so a report there may stand for a weaker signal. |
 | **Sunspot number (R12)** | The 12-month smoothed sunspot number. The CCIR model uses it to scale the ionosphere to the solar cycle. |
 
 ## 5. Grid: Create Maidenhead grid
@@ -653,6 +655,45 @@ Most of these decodes were on 15m. The pattern fits the day–night line moving 
 - **No activity is not no propagation.** An empty frame may mean nobody was on, or that you weren't listening.
 - One-way (`A→B only`) corridors often mean only one side's message was decoded, not that the path was one-way.
 
+### 7.8 Export research dataset
+
+*WSJT-X → Export research dataset…* writes your `ALL.TXT` decodes as a table for research: **one row per observed SNR**. Files from many operators can be stacked into one table and shared, for example with HamSCI or on Zenodo. The output is a CSV file plus a `<name>.schema.json` file that describes it. The full schema is in [research-export-schema.md](research-export-schema.md).
+
+| Setting | Default | Notes |
+|---|---|---|
+| ALL.TXT file(s) | | One or more files. Don't mix logs from two receivers covering the same time. |
+| From / To (UTC) | empty (all) | Rows from *From* up to, not including, *To*. Reading starts 6 hours earlier to learn grids. |
+| Band | empty (all bands) | e.g. `20m`. |
+| My callsign | stored callsign | Required: your decodes are measured at your station. Read from your settings, never changed. |
+| My grid | stored grid | Your end of every path you decoded. |
+| Decode floor | −24 dB | Reports at or below it are marked `censored`. |
+| Grid precision at most | 6 characters | Or 4, to share less about where you are. |
+| Pseudonymise callsigns | off | Replaces every callsign with a code; grids are kept. |
+| Salt for pseudonyms | empty | A secret word mixed into the codes. Use the same salt every time so codes match across exports. Never publish it. |
+| Research dataset (CSV) | temporary file | Choose a file name to keep it. The `.schema.json` is written next to it. |
+
+#### What a row is
+
+Two kinds of row (`report_kind`):
+
+- **exchange_report**: the report one station sent another. `W4XYZ K1ABC -05` means K1ABC hears W4XYZ at −5 dB, so `tx_call` = W4XYZ and `rx_call` = K1ABC. A report repeated in the same exchange is one row; `n_decoded` counts the repeats.
+- **my_decode**: your receiver decoded a message. `tx_call` = the sender, `rx_call` = you. Every decode is a row, CQs included.
+
+`exchange_id` links both directions of an exchange and your decodes of each side. One overheard exchange can give four SNRs: A→B, B→A, A→you and B→you. That is what lets a model separate station effects from path effects (TODO item 13).
+
+Each row with both grids also gets the path: distance, bearing, the fewest F2 hops (300 km layer), control points (the midpoint up to 2000 km, else 1000 km from each end), the solar zenith angle there and `day_night`. The fields are listed in [10.6](#106-research-dataset).
+
+#### Example
+
+The author's ALL.TXT, 11 November 2026 18:00 UTC to 12 November 06:00 UTC: 45,479 rows (6,886 exchange reports and 38,593 of the author's decodes) from 8,578 exchanges and 2,657 stations. 40,935 rows have both grids; 263 are censored at −24 dB. Most are on 15m and 20m.
+
+#### Limits
+
+- **Only what you decoded.** A signal you didn't decode is not a row. Repeated reports (`n_decoded` over 1) hint that the reply wasn't heard.
+- **Censoring.** Below about −24 dB FT8 doesn't decode, so weak signals are missing rather than low. Treat `censored` rows as "this or lower".
+- **Grids.** FT8 sends 4-character grids, so a station can be up to ~100 km from its grid's centre. Rows without both grids have empty path fields.
+- **Pseudonyms are not anonymity.** Grids, times and frequencies can still point to a station. Pseudonymise and cut grids to 4 characters before sharing widely.
+
 ## 8. Ionosphere
 
 Two sources of ionosphere data are available:
@@ -1194,6 +1235,30 @@ Plus:
 
 **Skip distance by hour**: see [8.4](#84-skip-distance-by-hour).
 
+### 10.6 Research dataset
+
+From *Export research dataset* (a CSV file, not a layer). Path fields are empty unless both grids are known. Details in [research-export-schema.md](research-export-schema.md).
+
+| Field | Meaning |
+|---|---|
+| `schema_version`, `source` | `1.0`; `alltxt`. |
+| `observer` | Your callsign: whose log the row came from. |
+| `time_utc` | When the message was sent, e.g. `2026-11-11T21:00:30Z`. |
+| `band`, `freq_mhz`, `mode` | `freq_mhz` is the dial frequency plus the audio offset. |
+| `report_kind` | `exchange_report` or `my_decode` (see [7.8](#78-export-research-dataset)). |
+| `exchange_id` | Links rows of one exchange. Empty for CQs. |
+| `tx_call`, `tx_grid` | The station transmitting. |
+| `rx_call`, `rx_grid` | The station receiving: the one that measured the SNR. |
+| `snr_db` | SNR in dB. |
+| `censored` | 1 if `snr_db` is at or below the decode floor. |
+| `n_decoded` | Times this report was decoded in the exchange (1 for your decodes). |
+| `grid_precision` | Characters in the coarser grid (4 or 6). |
+| `distance_km`, `bearing_deg` | From tx to rx. |
+| `n_min_hops` | Fewest F2 hops (layer at 300 km). |
+| `cp1_lat`, `cp1_lon`, `cp2_lat`, `cp2_lon` | Control points: the midpoint up to 2000 km; else 1000 km from tx (cp1) and from rx (cp2). |
+| `cp1_sza_deg`, `cp2_sza_deg` | Solar zenith angle at each control point. |
+| `day_night` | `day` (zenith below 90°), `twilight` (90–108°), `night` (108° or more), or `mixed` (the two control points differ). |
+
 ## 11. Data files, caches and settings
 
 The plugin keeps downloads in your QGIS profile folder. On Windows this is `%APPDATA%\QGIS\QGIS3\profiles\default\`. In QGIS, *Settings → User Profiles → Open Active Profile Folder* opens it.
@@ -1265,6 +1330,12 @@ The file isn't a WSJT-X 2.1+ `ALL.TXT` (lines like `261111_210000    14.074 Rx F
 
 **PSK Reporter: "wait N min"**
 PSK Reporter allows one query per 5 minutes. Wait, or map what you already have with *Import PSK Reporter reports*.
+
+**Export research dataset: "Enter My callsign"**
+Your decodes are rows received at your station, so the tool needs your callsign. Enter it, or set it once in another tool (e.g. *Import PSK Reporter reports*), which stores it.
+
+**Export research dataset: many rows have empty distance and day_night**
+Those stations never sent a grid in the read period, or *My grid* is empty (your decodes then have no path). Set *My grid*, or start *From* a little earlier.
 
 **Check paths says "no data" for everything**
 For KC2G, the paths must be within the time limit (3 hours by default) of KC2G's data. Choose *Auto* or *CCIR model only* for older paths. The first CCIR run needs internet to download the coefficients.

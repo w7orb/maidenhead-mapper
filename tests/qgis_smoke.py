@@ -4,8 +4,9 @@
 
 or through pytest with MM_QGIS_PYTHON set to that launcher (tests/test_qgis_smoke.py).
 Checks that the plugin imports, every Processing algorithm builds, and the
-ALL.TXT tools, corridor summaries, station balance and Propagation over time
-(algorithm, temporal layers and panel) work on a small synthetic ALL.TXT.
+ALL.TXT tools, corridor summaries, station balance, Propagation over time
+(algorithm, temporal layers and panel) and the research export work on a
+small synthetic ALL.TXT.
 Exits 0 and prints OK on success.
 """
 
@@ -51,7 +52,11 @@ def main():
     import processing
     from processing.core.Processing import Processing
     Processing.initialize()
+    import maidenhead_mapper
     import maidenhead_mapper.plugin  # noqa: F401  (imports every menu module lazily used)
+    pkg = os.path.dirname(os.path.abspath(maidenhead_mapper.__file__))
+    assert pkg == os.path.join(os.path.dirname(HERE), "maidenhead_mapper"), "imported from " + pkg
+    print("package:", pkg)
     import maidenhead_mapper.timeline.dock  # noqa: F401
     import maidenhead_mapper.live.dock  # noqa: F401
     from maidenhead_mapper.algorithms import corridors_time_alg as cta
@@ -75,7 +80,7 @@ def main():
 
     def algorithms():
         algs = provider.algorithms()
-        assert len(algs) >= 13, len(algs)
+        assert len(algs) >= 14, len(algs)
         for a in algs:
             inst = reg.createAlgorithmById(a.id())
             assert inst is not None, a.id()
@@ -152,6 +157,33 @@ def main():
         assert d.hist.sel == (0, 1), d.hist.sel
         d.deleteLater()
     check("propagation panel", panel)
+
+    def research_export():
+        import csv
+        import json
+        from maidenhead_mapper.core import research_export as rx
+        dest = os.path.join(tmp, "research.csv")
+        r = processing.run("maidenhead:research_export", {"FILES": [path], "MYCALL": "N0CALL", "MYGRID": "CN85",
+                                                           "OUTPUT": dest}, context=ctx)
+        assert r["OUTPUT"] == dest and r["ROWS"] == 17, r
+        with open(dest, encoding="utf-8", newline="") as f:
+            rows = list(csv.DictReader(f))
+        assert len(rows) == 17 and list(rows[0]) == rx.COLUMNS, list(rows[0])
+        kinds = [x["report_kind"] for x in rows]
+        assert (kinds.count("exchange_report"), kinds.count("my_decode")) == (5, 12), kinds
+        with open(r["SCHEMA"], encoding="utf-8") as f:
+            doc = json.load(f)
+        assert r["SCHEMA"] == os.path.join(tmp, "research.schema.json")
+        assert doc["row_counts"]["total"] == 17 and doc["pseudonymised"] is False and doc["plugin_version"]
+        dest2 = os.path.join(tmp, "research_20m.csv")
+        r = processing.run("maidenhead:research_export", {"FILES": [path], "MYCALL": "N0CALL", "MYGRID": "CN85",
+                                                           "BAND": "20m", "PSEUDONYMISE": True, "SALT": "x",
+                                                           "OUTPUT": dest2}, context=ctx)
+        assert r["ROWS"] == 7, r
+        with open(dest2, encoding="utf-8") as f:
+            text = f.read()
+        assert "K1ABC" not in text and "N0CALL" not in text and "FN31" in text
+    check("research export", research_export)
 
 
 try:

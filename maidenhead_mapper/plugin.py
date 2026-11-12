@@ -50,6 +50,8 @@ LAYOUT = [
         ("dock", "propagation"),
         ("alg", "maidenhead:station_balance", "Station balance from two-way reports…"),
         ("alg", "maidenhead:antenna_compare", "Antenna A/B comparison…"),
+        None,
+        ("alg", "maidenhead:research_export", "Export research dataset…"),
     ]),
     ("Ionosphere", [
         ("alg", "maidenhead:fetch_ionosphere", "Fetch ionosphere (KC2G)…"),

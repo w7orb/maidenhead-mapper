@@ -48,7 +48,7 @@ Everything is under *Plugins → Maidenhead Mapper* (and the toolbar button's dr
 |---|---|
 | Grid | Create Maidenhead grid |
 | PSK Reporter | Fetch from PSK Reporter, Import PSK Reporter reports |
-| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Import ADIF log, Summarize exchanges by grid pair, Propagation over time (panel), Station balance from two-way reports, Antenna A/B comparison |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Import ADIF log, Summarize exchanges by grid pair, Propagation over time (panel), Station balance from two-way reports, Antenna A/B comparison, Export research dataset |
 | Ionosphere | Fetch ionosphere (KC2G), Check paths against the ionosphere (MUF), Find sporadic-E paths, Skip distance by hour |
 | (top level) | Activity timeline (panel) |
 
@@ -162,6 +162,10 @@ Takeoff angle is estimated, never measured. By default it uses the F2 layer heig
 
 Below the decode floor the weaker antenna reports nothing rather than a low SNR, so read `decode_adv` (only A − only B, over all decodes) next to the median. In the 2022 DXCommander/loop recordings the median at 10–15° takeoff is about even, but the loop got 222 decodes the vertical missed against 81 the other way (152 vs 42 with the fixed 300 km layer). The result is a relative pattern; trust bins with ~100 pairs or more.
 
+### Export research dataset (WSJT-X)
+
+Writes ALL.TXT decodes as a CSV with one row per observed SNR, for merging with other operators' data and sharing (e.g. HamSCI, Zenodo): the reports stations sent each other in exchanges and your own decodes, linked by `exchange_id`, with distance, bearing, fewest hops, control points, day/night there and a censored flag. Callsigns can be pseudonymised (salted SHA-256). A `.schema.json` next to the CSV describes every field; see [docs/research-export-schema.md](docs/research-export-schema.md).
+
 ### Activity timeline
 
 *Plugins → Maidenhead Mapper → Activity timeline* opens a panel under the map. Choose a dataset: a PSK Reporter station layer, an ALL.TXT import, a saved live session, or **WSJT-X live map (running)**.
@@ -246,7 +250,7 @@ python -m pytest
 
 Runs with any Python 3.8+ that has pytest installed; QGIS is not needed. The plugin itself uses only the Python standard library and QGIS.
 
-A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance and Propagation over time tools (including the time-enabled layers and the panel) work on a small synthetic `ALL.TXT`. It runs in QGIS's own Python, so nothing is installed there:
+A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance, Propagation over time (including the time-enabled layers and the panel) and research export tools work on a small synthetic `ALL.TXT`. It runs in QGIS's own Python, so nothing is installed there:
 
 ```
 "C:\Program Files\QGIS 3.44.2\bin\python-qgis.bat" tests\qgis_smoke.py

@@ -9,8 +9,9 @@ about=For amateur (ham) radio operators.
     Activity timeline: a reports-per-hour chart for any of these; drag across it to map only those hours.
     WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
     Ionosphere: check any paths against KC2G's current maps or the CCIR monthly-median model: path MUF, hops at the layer height, and which contacts F2 can't explain.
+    Export research dataset: one CSV row per observed SNR from ALL.TXT (exchange reports and your decodes, with path, control points and day/night), optionally pseudonymised, for sharing with other operators and researchers.
     No extra Python packages needed.
-version=0.11.1
+version=0.12.0
 author=Cody Tews
 email=w7orb.radio@gmail.com
 homepage=https://github.com/w7orb/maidenhead-mapper
@@ -23,6 +24,9 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.12.0
+    - New: Export research dataset (WSJT-X): one CSV row per observed SNR from ALL.TXT, with exchange_id linking both directions and your decodes, distance, bearing, fewest hops, control points, solar zenith and day/night there, censored flag, optional salted-hash pseudonyms and 4-character grids, and a .schema.json sidecar (schema 1.0, docs/research-export-schema.md)
+    - Tests: research export unit tests and a QGIS smoke check
     0.11.1
     - Propagation over time: chart selection no longer drops the last hour when 'To' is past the end of the data; files entirely before the window are skipped
     - Tests: end-to-end ALL.TXT -> corridors-over-time tests, and a QGIS smoke test (tests/qgis_smoke.py)
