@@ -32,14 +32,28 @@
 | 25 | ~~Propagation over time with the time slider~~ **done** | M | High | — | Index ALL.TXT, pick dates, group by hour/day, time-enabled corridor and cell layers for the Temporal Controller. Possible next: the same from saved live sessions and PSK Reporter pulls; include my own decodes (their area → mine). |
 | 26 | Predicted vs observed (VOACAP) | M (paths) + M (coverage maps) | **High** (community value) | 18 helps; VOACAP installed by the user | Add VOACAP's monthly-median REL, SNR, MUF and mode to observed corridors and exchanges, and report the gap from what was heard. Few such comparisons exist (3Y0K: VOACAP −11.3 dB bias vs RBN). Later: coverage maps from my station under observed spots. |
 
-**Done**: 1–10, 12, 17, 20–23. **Open**: 11 (needs weeks of data), 13 (propagation model: dataset export done, model next), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 16 (reference-antenna mode), 18 (decision pending: basic vs operational MUF), 19 (live hop estimates).
+**Done**: 1–10, 12, 17, 20–25, and step 1 of 13 (research export). **Open**: 11 (needs weeks of data), 13 steps 2–3 (propagation model), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 16 (reference-antenna mode), 18 (decision pending: basic vs operational MUF), 19 (live hop estimates), 26 (predicted vs observed, VOACAP).
+
+## Next up (suggested order)
+
+1. **18**: decide basic vs operational MUF (suggestion: rename the status "above basic MUF" now; revisit with 26).
+2. **GitHub**: private vulnerability reporting, secret scanning, CodeQL; a tests workflow; a v0.12.0 release.
+3. **Check the research export** on an evening with your own QSOs (reports you sent should appear as `exchange_report` rows with rx = you).
+4. **26 step 1**: VOACAP predicted vs observed for corridors and exchanges.
+5. **13 remainder for the export**: f/MUF per row, an Es flag, rows for missed decodes.
+6. **Propagation over time** from saved live sessions and PSK Reporter pulls (follow-up to 25).
+7. **19**: live hop estimates.
+8. **Corridors in the Activity timeline** (follow-up to 24).
+9. Later / research: distance-vs-time charts with flare overlay and LSTID detection (may fit prop-archive better), 16, 26 step 2 (coverage maps), 13 steps 2–3, 14, 15, 11, campaign mode for the 2 August 2027 eclipse.
+
+Long-term capture and analysis outside QGIS lives in the separate prop-archive project (`d:\projects\gis\prop-archive`), which uses the same research export schema.
 
 ## Details
 
 1. **Import WSJT-X ALL.TXT**: a Processing tool that runs a folder of `ALL.TXT` files through the same exchange tracker as the live map. Output is an exchanges line layer and a station point layer for past sessions, filterable by band and time.
 2. **Save live sessions automatically**: write live stations and exchanges to a GeoPackage as they arrive, so a session survives closing QGIS. Today it only survives if you use *Make Permanent* by hand.
 3. **Activity timeline for the live layers**: reports per hour and window selection for *WSJT-X live* and *WSJT-X exchanges*, not only PSK Reporter layers.
-4. **Hop geometry and takeoff angle**: for each path (PSK Reporter and exchanges), use distance and an assumed or measured layer height to list the possible hop counts. Rule some out using the MUF and a realistic takeoff-angle range (about 2–35°). Add fields `hops_likely`, `takeoff_deg`, and `reflection_lat`/`reflection_lon` at each hop's midpoint, plus a reflection-point layer. Keep the geometry in pure Python with tests. *Done:* `core/hops.py` (with `reflection_points()`), plus `hops` and `takeoff_deg` on every layer. *Left:* reflection lat/lon fields, the reflection-point layer, and the MUF rule-out.
+4. **Hop geometry and takeoff angle**: for each path (PSK Reporter and exchanges), use distance and an assumed or measured layer height to list the possible hop counts. Rule some out using the MUF and a realistic takeoff-angle range (about 2–35°). Add fields `hops_likely`, `takeoff_deg`, and `reflection_lat`/`reflection_lon` at each hop's midpoint, plus a reflection-point layer. Keep the geometry in pure Python with tests. *Done:* `core/hops.py` (with `reflection_points()`), plus `hops` and `takeoff_deg` on every layer. Check paths later added `reflection_lat`/`reflection_lon`, the reflection-point layer and the MUF rule-out.
 5. **Ionosonde / model enrichment**: fetch measured layer height (hmF2), critical frequency (foF2) and the propagation factor M(3000)F2 for each path's reflection points and time. Sources, checked 2026-11-11:
    - KC2G `https://prop.kc2g.com/api/stations.json`: foF2, hmF2, MUF(3000) and foEs per ionosonde, with a confidence score.
    - KC2G `https://prop.kc2g.com/renders/current/mufd-normal-now.geojson` and `fof2-normal-now.geojson`: contour maps that load straight into QGIS.
