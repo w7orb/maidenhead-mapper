@@ -109,6 +109,15 @@ Draws the locator grid as polygon layers with a `locator` label.
 
 The grid always spans exactly −180 to 180 and −90 to 90, whatever basemap or projection you use.
 
+![Create Maidenhead grid dialog](images/dlg_create_grid.png)
+*The Create Maidenhead grid dialog.*
+
+![World map covered by 324 labelled Maidenhead fields](images/res_grid_world.png)
+*Maidenhead fields in an Americas-centred Equal Earth projection.*
+
+![Grid squares CN40 to DN59 over the US Pacific Northwest](images/res_grid_squares.png)
+*Squares around the Pacific Northwest: fields CN and DN, each split into 100 squares.*
+
 ## 6. PSK Reporter
 
 [PSK Reporter](https://pskreporter.info) collects reception reports from receivers worldwide. For your callsign it has two kinds:
@@ -134,6 +143,12 @@ Downloads the reports PSK Reporter has for a callsign and saves them to a folder
 - PSK Reporter asks clients to query **no more than once every 5 minutes**. The tool refuses earlier attempts and tells you how long to wait. A failed attempt counts too.
 - There is no history beyond about 24 hours. To build one, fetch into the **same folder** every few hours. Reports repeated across overlapping fetches are counted once.
 
+![Fetch from PSK Reporter dialog with callsign, hours, folder and style](images/dlg_fetch_psk.png)
+*The Fetch from PSK Reporter dialog.*
+
+![World map of stations reported by PSK Reporter, coloured by band](images/res_psk_band.png)
+*70 of the 1,499 stations one receiver (KFS) reported in 6 hours, spread across directions, coloured by band. These spots carry no SNR, so the SNR style would leave them uncoloured; use the band style for such data.*
+
 ### 6.2 Import PSK Reporter reports
 
 Maps a folder of `psk_*.json` files with filters. The output is a station layer: one point per remote station **and direction**, at the centre of its most recent locator.
@@ -150,6 +165,9 @@ Maps a folder of `psk_*.json` files with filters. The output is a station layer:
 | Style | SNR (best report) | |
 
 Fields: see [station layers](#101-station-layers). Reports without a usable locator are counted in the log, not silently dropped.
+
+![Import PSK Reporter reports dialog with folder, callsign, grid, direction, bands, times, precision and style](images/dlg_import_psk.png)
+*The Import PSK Reporter reports dialog.*
 
 ### 6.3 Station styles
 
@@ -194,6 +212,9 @@ Press **Start**. The status area shows:
 - stations on the map, and stations *waiting for a grid*;
 - exchanges by stage;
 - the session file, if saving.
+
+![WSJT-X live map panel with mode, address, port, fade time, session folder and status](images/dock_live.png)
+*The live map panel after a session: the WSJT-X instance, decode rate, stations, exchanges by stage and the session file.*
 
 #### What you see
 
@@ -274,6 +295,18 @@ Maps past sessions from WSJT-X's `ALL.TXT` (WSJT-X 2.1 or later; find it with *F
 
 ALL.TXT has no record of which QSOs you actually logged. Use the ADIF import for that.
 
+![Import WSJT-X ALL.TXT dialog](images/dlg_import_alltxt.png)
+*The Import WSJT-X ALL.TXT dialog.*
+
+![World map of decoded stations coloured by best SNR](images/res_alltxt_stations.png)
+*Stations: 60 of the 1,351 stations decoded in one day, spread across directions and distances, coloured by best SNR (purple weak, yellow strong).*
+
+![Great-circle exchange lines between other stations across North America, to Japan and South America](images/res_alltxt_exchanges.png)
+*Exchanges: 40 exchanges with both reports, 21:00–22:00 UTC, spread across directions, with their stations. Green = confirmed, blue = both reports.*
+
+![Exchange lines in the eastern US labelled with the SNR each way](images/res_alltxt_zoom.png)
+*Zoomed in: 40 exchanges with both reports between stations in the eastern US (one day). A label such as `KB1GTG→KZ9S +13  KZ9S→KB1GTG +14` gives the SNR each way.*
+
 ### 7.3 Import ADIF log (.adi / .adx)
 
 Maps your logged QSOs from ADIF files: WSJT-X's `wsjtx_log.adi` (next to `ALL.TXT`), JTDX, MSHV, N1MM, Log4OM, QRZ, or a LoTW download. Both `.adi` and the XML `.adx` format work.
@@ -298,6 +331,12 @@ Maps your logged QSOs from ADIF files: WSJT-X's `wsjtx_log.adi` (next to `ALL.TX
 
 - **Worked stations (ADIF)**: one point per callsign, coloured by band. See [fields](#103-adif-layers).
 - **QSOs (ADIF)**: one great-circle line per QSO, coloured by band. These lines have the **same fields as an exchange layer**, plus a few ADIF ones. You are `call_a`, so `a_hears_b` is the report you sent and `b_hears_a` the one you received. That makes the layer usable by *Check paths*, *Station balance*, *Find sporadic-E paths* and *Skip distance by hour*.
+
+![Import ADIF log dialog](images/dlg_import_adif.png)
+*The Import ADIF log dialog.*
+
+![Four QSO lines from the Pacific Northwest to Japan, Australia and the US east coast, with worked-station points](images/res_adif.png)
+*A 4-QSO sample log (one QSO merged with its LoTW confirmation): QSO lines and worked stations, coloured by band.*
 
 ADIF layers don't appear in the Activity timeline: a log spanning years doesn't suit an hourly chart. Use the layer's filter (right-click → *Filter…*) on `first_utc` to look at a period.
 
@@ -326,6 +365,13 @@ It also compares **what you hear with what they hear**. When you decode a signal
 | Exchanges needed for a verdict | 3 | |
 | Station balance | temporary layer | Points coloured by verdict. |
 | Exchanges with contrasts | off | Optional copy of the exchanges with `report_diff_db`, `b_vs_me_db`, `a_vs_me_db`. |
+
+
+![Station balance dialog](images/dlg_station_balance.png)
+*The Station balance dialog.*
+
+![Map of stations in North America, Europe and the Caribbean coloured by verdict](images/res_balance.png)
+*The 60 stations with the most two-way exchanges in one day's ALL.TXT: 25 loud but deaf (red), 17 balanced (green), 18 good ears (blue). One day is far less than the ~100 exchanges per station recommended, so read this as an illustration.*
 
 **Limits**
 
@@ -371,6 +417,13 @@ Keep both running for as long as you can. A few hours gives a direction pattern;
 
 **Read `decode_adv` next to the median.** Below the decode floor (about −20 dB) the weaker antenna doesn't report a low SNR; it reports nothing. A median over matched pairs alone hides that. `only_a`, `only_b` and `decode_adv` show it.
 
+
+![Antenna A/B comparison dialog with receiver A and B files](images/dlg_antenna_compare.png)
+*The Antenna A/B comparison dialog.*
+
+![Direction wedges around the Pacific Northwest, green to the north-west and purple to the north, with station points in the eastern US](images/res_antenna.png)
+*A vertical (A) against a loop (B), from about 75 minutes of 2022 recordings: direction wedges (green = A stronger, purple = B stronger; labels give the median, pairs and only-A/only-B decodes) and the 60 stations with the most matched decodes.*
+
 #### How the takeoff angle is estimated
 
 The takeoff angle is **estimated, never measured**. FT8 carries no arrival-angle information. With the default setting, for each station and each 15 minutes:
@@ -408,6 +461,12 @@ Downloads KC2G's current data and shows it.
 **Outputs**: *Ionosondes HH:MM UTC* (points labelled with the station code) and a contour layer named after the map and time. See [fields](#104-ionosphere-layers).
 
 The data is cached and downloaded again at most every 15 minutes. KC2G is a volunteer service: please don't automate frequent requests.
+
+![Fetch ionosphere (KC2G) dialog](images/dlg_fetch_ionosphere.png)
+*The Fetch ionosphere (KC2G) dialog.*
+
+![World map of ionosonde stations with MUF(3000) contour lines](images/res_kc2g.png)
+*KC2G ionosondes (labelled by station code) and MUF(3000)F2 contours in MHz, 23:02 UTC.*
 
 ### 8.2 Check paths against the ionosphere
 
@@ -450,6 +509,12 @@ Near a current, trusted ionosonde (confidence 50 or more), the KC2G maps are nud
 
 The output paths are coloured by `f2_status`: green F2, red above, grey no data.
 
+![Check paths against the ionosphere dialog](images/dlg_check_paths.png)
+*The Check paths dialog.*
+
+![Green and red great-circle paths with reflection points over MUF contours](images/res_check_paths.png)
+*20 paths the F2 layer supports (green) and 20 above the F2 MUF (red), with their reflection points (grey dots = hops, diamonds = control points) over KC2G MUF(3000) contours.*
+
 ### 8.3 Find sporadic-E paths
 
 Finds paths sporadic-E most likely carried: one hop of 500–2,300 km on 12m, 10m, 6m or higher that the F2 layer can't explain.
@@ -476,6 +541,9 @@ If the input has been through *Check paths*, its `f2_status` is used. With the C
 - **Sporadic-E candidates**: a point at each path's midpoint (where it met the Es layer). `foes_min_mhz` is the lowest Es critical frequency that returns that band at that distance; `takeoff_es` is the takeoff angle off a 105 km layer.
 - **Sporadic-E clouds**: candidates within the cloud distance and time of each other, grouped. Each has its count, bands and highest `foes_max_mhz`.
 
+![Find sporadic-E paths dialog](images/dlg_sporadic_e.png)
+*The Find sporadic-E paths dialog. On the November evening used for these screenshots it found no candidates: sporadic-E is mostly a summer (and short mid-winter) effect, so there is no result map here.*
+
 ### 8.4 Skip distance by hour
 
 A table, per band and UTC hour, of how far contacts reached. It shows the skip zone growing and shrinking through the day.
@@ -499,6 +567,12 @@ Otherwise distances are from your grid.
 
 Plot the table with the DataPlotly plugin, or look at it in the Activity timeline, which shows the skip edge per band for the chosen hours.
 
+![Skip distance by hour dialog](images/dlg_skip_distance.png)
+*The Skip distance by hour dialog.*
+
+![Table of band, hour, contact counts, skip edge, distances and foF2 values](images/res_skip_table.png)
+*Skip distance by hour for one day's ALL.TXT. The 12m hour has only 3 contacts, too few for a skip edge.*
+
 ## 9. Activity timeline
 
 The top-level **Activity timeline** entry opens a panel under the map: a bar chart of activity per UTC hour that also filters the map.
@@ -518,6 +592,10 @@ The top-level **Activity timeline** entry opens a panel under the map: a bar cha
    - stations heard and heard-me, stations per band, and the farthest and strongest station in the window;
    - for logs, the skip edge per band.
 5. **Double-click** or **All hours** chooses everything. **◀ ▶** move the window by its own length.
+
+
+![Activity timeline panel with an hourly bar chart and a summary below](images/dock_timeline.png)
+*The Activity timeline for one day's ALL.TXT import: decodes per hour, and the summary for the chosen hours.*
 
 Notes:
 

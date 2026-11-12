@@ -36,7 +36,11 @@ If a term is new, the [user guide's glossary](user-guide.md#4-words-used-in-this
 
 **You should see** two new layers, *Maidenhead fields* (324 cells, labelled `AA`–`RR`) and *Maidenhead squares* (32,400 cells). Zoom in over your area: squares and their labels (e.g. `FN31`) appear once you're closer than about 1:20,000,000.
 
-<!-- screenshot: world map with Maidenhead fields, zoomed region showing squares -->
+![World map covered by labelled Maidenhead fields](images/res_grid_world.png)
+*Maidenhead fields in an Americas-centred Equal Earth projection.*
+
+![Grid squares over the US Pacific Northwest](images/res_grid_squares.png)
+*Zoomed in, each field splits into 100 squares.*
 
 ### 1c. Centre the map on the Americas (optional)
 
@@ -94,7 +98,8 @@ Click a dot with the *Identify* tool (the "i" icon) to see its fields:
 
 To restyle, open *Layer Properties → Symbology*. Callsign labels appear when you zoom in.
 
-<!-- screenshot: heard_me stations coloured by band, with labels zoomed in -->
+![World map of PSK Reporter stations coloured by band](images/res_psk_band.png)
+*70 of the stations one receiver reported in 6 hours, coloured by band.*
 
 ---
 
@@ -134,7 +139,8 @@ FT8 reports say how the sender hears the addressee. When you decode both sides o
 
 **What this tells you**: every exchange you overhear is a small propagation measurement between two other places. It doesn't need your transmitter at all. A single exchange is noisy (FT8 reports fade by many dB); many exchanges tell a story. Step 7 uses them.
 
-<!-- screenshot: exchange lines with report labels -->
+![Exchange lines in the eastern US labelled with the SNR each way](images/res_alltxt_zoom.png)
+*40 exchanges with both reports between stations in the eastern US. Each label gives the SNR each way.*
 
 ### 3c. ADIF: your logged QSOs
 
@@ -200,7 +206,8 @@ Stations fade over 30 minutes after they were last heard. When you log a QSO, th
 
 With saving on, the session is written every 2 seconds to `wsjtx_session_YYYYMMDD_HHMMSS.gpkg`, so nothing is lost if QGIS closes. To look at it again later, drag its `stations` and `exchanges` tables from the `.gpkg` into any project; the timeline recognises it. The Activity timeline also offers **WSJT-X live map (running)**: choosing hours there shows the past while the map keeps recording.
 
-<!-- screenshot: live panel status and fading markers -->
+![WSJT-X live map panel with settings and status](images/dock_live.png)
+*The live map panel: instance, decode rate, stations, exchanges by stage and the session file.*
 
 ---
 
