@@ -36,7 +36,7 @@ Everything is under *Plugins → Maidenhead Mapper* (and the toolbar button's dr
 |---|---|
 | Grid | Create Maidenhead grid |
 | PSK Reporter | Fetch from PSK Reporter, Import PSK Reporter reports |
-| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Import ADIF log, Station balance from two-way reports, Antenna A/B comparison |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT, Import ADIF log, Summarize exchanges by grid pair, Station balance from two-way reports, Antenna A/B comparison |
 | Ionosphere | Fetch ionosphere (KC2G), Check paths against the ionosphere (MUF), Find sporadic-E paths, Skip distance by hour |
 | (top level) | Activity timeline (panel) |
 
@@ -129,6 +129,10 @@ In an exchange each side reports how it hears the other. Path loss and antennas 
 The fit allows for FT8's limits (DK3BA 2024). Reports at or below about −20 dB sit at the decode floor, and reports at or above about +15 dB are compressed, so both are treated as bounds, not exact values (a Tobit-style step). Fading outliers are down-weighted with a Huber loss. `n_censored` and `n_dropped` say how many pairs that affected.
 
 It also compares **what you see with what they see**: `hears_vs_me_db` is how a station heard a signal minus how you heard the same signal (median over exchanges). The optional exchanges output has the per-exchange numbers (`report_diff_db`, `b_vs_me_db`, `a_vs_me_db`). Paths differ, so trust stations with many exchanges in different directions; this needs hours to days of decoding.
+
+### Summarize exchanges by grid pair (WSJT-X)
+
+Many exchange lines become one **corridor** per pair of grid cells (field, 2×2 squares or square) and band: the number of exchanges and distinct stations at each end, the median SNR each way (`a_to_b_db`, `b_to_a_db`), the median two-way difference (`diff_db`), the hours it was active, and the F2/Es/above-MUF counts if the input went through *Check paths*. Line width shows traffic, colour the median SNR. Station balance rows now also carry partners, median and farthest distance, bands, and the median report each way (`heard_db`, `hears_db`).
 
 ### Antenna A/B comparison (WSJT-X)
 

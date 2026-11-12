@@ -318,7 +318,7 @@ If nothing is found, that's normal outside the sporadic-E season or on lower ban
 
 ---
 
-## Step 7. Station balance: loud but deaf? (5 minutes, and lots of data)
+## Step 7. Station balance and corridors (5 minutes, and lots of data)
 
 1. *WSJT-X → Station balance from two-way reports…*
 2. **Exchange layer(s)**: your live exchanges and/or ALL.TXT exchanges. You can add ADIF QSOs too. Keep **Separately per band** ticked.
@@ -342,6 +342,17 @@ If nothing is found, that's normal outside the sporadic-E season or on lower ban
 `hears_vs_me_db` compares how a station heard a signal with how **you** heard the same signal. Positive means they hear those signals better than you do. Your own row (`is_me = 1`) answers "am I loud but deaf?"
 
 **How much data**: FT8 reports are noisy (they fade by up to 30 dB). You need **dozens to about 100 exchanges per station** for a trustworthy verdict, and an hour of decoding gives only a few per station. Expect mostly *uncertain* at first. Run the live map with saving on for days, then try again.
+
+### 7b. Summarize into corridors
+
+With thousands of exchanges, the lines are unreadable. Summarize them:
+
+1. *WSJT-X → Summarize exchanges by grid pair…*
+2. **Exchange layer(s)**: the same layers. **Cell size**: *Field (EM)*. Click **Run**.
+
+**You should see** one line per pair of grid fields and band. Wider lines carry more exchanges; the colour is the median SNR. Zoomed in, a label such as `127×  -1/-2` gives the number of exchanges and the median SNR each way.
+
+**What this tells you**: which paths were really open, how strong they were, and for how long (`hours_active`). Check `stations_a` and `stations_b`: a corridor with one station at one end is a single busy station, not an open path. Rerun with *2×2 squares* or *Square* to look at your region in more detail.
 
 ---
 

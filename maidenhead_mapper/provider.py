@@ -12,6 +12,7 @@ from .algorithms.import_alltxt import ImportAllTxtAlgorithm
 from .algorithms.ionosphere import CheckPathsAlgorithm, FetchIonosphereAlgorithm
 from .algorithms.antenna_alg import AntennaCompareAlgorithm
 from .algorithms.balance_alg import StationBalanceAlgorithm
+from .algorithms.corridors_alg import SummarizeExchangesAlgorithm
 from .algorithms.propagation import SkipDistanceAlgorithm, SporadicEAlgorithm
 from .algorithms.import_psk import ImportPskAlgorithm
 
@@ -39,4 +40,5 @@ class MaidenheadProvider(QgsProcessingProvider):
         self.addAlgorithm(SporadicEAlgorithm())
         self.addAlgorithm(SkipDistanceAlgorithm())
         self.addAlgorithm(StationBalanceAlgorithm())
+        self.addAlgorithm(SummarizeExchangesAlgorithm())
         self.addAlgorithm(AntennaCompareAlgorithm())

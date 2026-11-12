@@ -65,7 +65,7 @@ Everything is under *Plugins → Maidenhead Mapper*, and under the Maidenhead Ma
 |---|---|
 | Grid | Create Maidenhead grid… |
 | PSK Reporter | Fetch from PSK Reporter…, Import PSK Reporter reports… |
-| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT…, Import ADIF log (.adi / .adx)…, Station balance from two-way reports…, Antenna A/B comparison… |
+| WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT…, Import ADIF log (.adi / .adx)…, Summarize exchanges by grid pair…, Station balance from two-way reports…, Antenna A/B comparison… |
 | Ionosphere | Fetch ionosphere (KC2G)…, Check paths against the ionosphere (MUF)…, Find sporadic-E paths…, Skip distance by hour… |
 | (top level) | Activity timeline (panel) |
 
@@ -385,6 +385,8 @@ A station is marked **uncertain** when it has fewer usable exchanges than *Excha
 | good ears | below −3 dB | Weak signal and/or a quiet receiver. |
 | uncertain | | Too few usable exchanges, or a standard error over 3 dB. |
 
+Each station row also carries plain facts: how many `partners` it had, their `median_km` and `max_km` (and the `farthest` one), its `bands`, and the median report others gave it (`heard_db`) and it gave others (`hears_db`).
+
 It also compares **what you hear with what they hear**. When you decode a signal and the station it was sent to reports it, `hears_vs_me_db` is how that station heard it minus how you did (median). Positive means they hear those signals better than you.
 
 | Setting | Default | Notes |
@@ -512,6 +514,70 @@ Because the layer rises and falls through the day, the same station is heard at 
 - A path may use more hops than the fewest, at a much higher angle. Around 3,300 km the estimate can jump between one hop (~2°) and two hops (~14°).
 - The result is a **relative** pattern (A versus B), not absolute gain.
 - Fading makes single pairs noisy (about 5 dB scatter). Trust bins with about 100 pairs or more.
+
+### 7.6 Summarize exchanges by grid pair (corridors)
+
+A busy evening gives thousands of exchange lines, too many to read. This tool merges them into **corridors**: one line per pair of grid cells and band, carrying medians of the reports in each direction. Single FT8 reports fade by 20–30 dB; a median over many exchanges is far more trustworthy.
+
+It works on any exchange layer: live, saved session, ALL.TXT, ADIF QSOs, or the output of *Check paths*. Several layers are combined.
+
+| Setting | Default | Notes |
+|---|---|---|
+| Exchange layer(s) | | Several can be combined. |
+| Cell size | Square | **Field** (`EM`, for a world map), **2×2 squares** (a middle ground, named by the south-west square: `EM68` covers EM68, EM69, EM78 and EM79) or **Square** (`EM78`, for a regional map). |
+| Separately per band | on | |
+| From / To | | Optional time window (UTC), on each exchange's `first_utc`. |
+| Least exchanges per corridor | 3 | Hides one-off pairs. |
+| Exchange corridors | temporary layer | Lines coloured by median SNR, wider with more exchanges. |
+
+#### How it works
+
+Each exchange is placed in the cells of its two grids. The two cells are put in alphabetical order, `cell_a` before `cell_b`. Because the first locator letter is longitude, `cell_a` is usually the western end. An exchange stored the other way round has its reports swapped, so each direction stays separate:
+
+- `a_to_b_db`: median SNR of signals **from cell A heard in cell B**;
+- `b_to_a_db`: the reverse;
+- `diff_db`: the median, over exchanges with **both** reports, of (A→B minus B→A). As in [7.4](#74-station-balance-from-two-way-reports), path and antennas cancel within one exchange. A corridor that stays lopsided over many exchanges means the stations at one end are, on the whole, louder and/or deafer than at the other.
+
+`diff_db` isn't simply `a_to_b_db − b_to_a_db`: the two medians use every report in that direction, while `diff_db` uses only exchanges with both. Trust `diff_db` for balance; use the two medians for "how strong is this path".
+
+Exchanges inside one cell have no line to draw. The log counts them, along with exchanges without a grid, outside the time window, and on corridors with too few exchanges.
+
+`stations_a` and `stations_b` count distinct callsigns at each end. A corridor with `stations_a` = 1 is one station (often a DXpedition) working many; one with many stations at both ends is a genuinely open path.
+
+#### Example
+
+The author's live map on 11 November 2026, 19:42–23:44 UTC: 3,036 exchanges, nearly all on 15m. With 3 or more exchanges per corridor:
+
+| Cell size | Corridors | Exchanges within one cell |
+|---|---|---|
+| Field | 160 | 117 |
+| 2×2 squares | 262 | 18 |
+| Square | 137 | 10 |
+
+At field size, 160 lines cover 2,705 of the 3,036 exchanges. The busiest:
+
+| cell_a | cell_b | exchanges | stations_a | stations_b | a_to_b_db | b_to_a_db | diff_db (n) | distance_km | hours_active |
+|---|---|---|---|---|---|---|---|---|---|
+| EM | EN | 135 | 60 | 45 | −0.5 | −4.0 | −2.0 (30) | 1,112 | 4 |
+| EM | FN | 127 | 57 | 47 | −1.0 | −1.5 | +3.0 (62) | 2,026 | 5 |
+| EM | PM | 109 | 46 | 49 | −13.0 | −11.0 | −5.5 (26) | 11,193 | 3 |
+| FN | PM | 91 | 38 | 44 | −14.5 | −15.0 | −1.0 (25) | 10,894 | 3 |
+
+So the US–Japan corridors (EM–PM, FN–PM) were open for three hours with dozens of stations at each end, at a typical −11 to −15 dB, about 10–15 dB weaker than the domestic paths. EM–PM has a −5.5 dB `diff_db` over 26 two-way exchanges: the Japanese stations heard the EM stations better than the reverse, more than fading alone would explain.
+
+#### Reading the results
+
+1. Start at **field** size for a world view, then rerun at **2×2 squares** or **square** over a region.
+2. **Width = how much traffic; colour = how strong.** A wide, dark (weak) line is a busy marginal path, often a DX opening.
+3. **Check `stations_a` and `stations_b`** before reading anything into a corridor.
+4. **`hours_active`** separates a brief opening from a path that stayed open all evening. Use *From / To*, or run once per hour, to watch it move.
+5. If the input went through *Check paths*, `n_f2`, `n_es` and `n_above_muf` show how each corridor was probably propagating.
+
+#### Try this
+
+- **Day against night**: run the same session with two time windows and compare the corridors.
+- **A week of sessions**: give every saved session at once, at field size, to see your region's regular paths.
+- **Only your QSOs**: run it on your ADIF QSOs to see which corridors your own contacts use.
 
 ## 8. Ionosphere
 
@@ -1009,6 +1075,27 @@ Plus:
 | `n_censored`, `n_dropped` | Exchanges with a report at the floor or compressed; pairs left out. |
 | `hears_vs_me_db`, `n_vs_me`, `n_vs_me_skipped` | Median "how they heard it minus how I did", its count, and skipped comparisons. |
 | `is_me` | 1 for your own row. |
+| `partners` | Distinct stations it exchanged with. |
+| `median_km`, `max_km`, `farthest` | Median and largest distance to those partners, and the farthest one's call. |
+| `bands` | Bands it was seen exchanging on. |
+| `heard_db` | Median SNR others reported for its signal. |
+| `hears_db` | Median SNR it reported for others. |
+
+**Exchange corridors** (see [7.6](#76-summarize-exchanges-by-grid-pair-corridors)):
+
+| Field | Meaning |
+|---|---|
+| `cell_a`, `cell_b`, `band` | The two cells (alphabetical order) and band. |
+| `exchanges`, `stations_a`, `stations_b` | Exchanges, and distinct callsigns at each end. |
+| `a_to_b_db`, `n_a_to_b` | Median SNR of signals from A heard in B, and the number of reports. |
+| `b_to_a_db`, `n_b_to_a` | The reverse. |
+| `diff_db`, `n_two_way` | Median of (A→B minus B→A) over exchanges with both reports. |
+| `snr_db` | Median of all reports, both ways (the line colour). |
+| `distance_km` | Between the cell centres. |
+| `first_utc`, `last_utc`, `hours_active` | Time span, and distinct UTC hours with an exchange. |
+| `n_f2`, `n_es`, `n_above_muf` | From *Check paths* (`mode_guess`, or `f2_status`), when the input has them. |
+| `calls_a`, `calls_b` | Callsigns at each end. |
+| `label` | `exchanges×  A→B/B→A`, shown when zoomed in. |
 
 **Antenna A/B** (all three outputs share these counts):
 

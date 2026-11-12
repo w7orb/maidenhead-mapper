@@ -25,6 +25,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QCoreApplication
 
 from ..core import balance as bal
+from ..core import corridors as cor
 from ..core import maidenhead as mh
 from ..core.psk import base_callsign
 from . import styling
@@ -49,6 +50,12 @@ def _renderer():
                                             "outline_color": "255,255,255,220", "outline_width": "0.25"})
         cats.append(QgsRendererCategory(verdict, sym, verdict))
     return QgsCategorizedSymbolRenderer("verdict", cats)
+
+
+def _facts(sf):
+    if sf is None:
+        return [None] * 7
+    return [sf.partners, sf.median_km, sf.max_km, sf.farthest, sf.bands or None, sf.heard_db, sf.hears_db]
 
 
 class StationBalanceAlgorithm(QgsProcessingAlgorithm):
@@ -102,6 +109,9 @@ class StationBalanceAlgorithm(QgsProcessingAlgorithm):
             "hear these signals better than you. Comparisons where either SNR is censored are "
             "skipped (n_vs_me_skipped). Paths differ, so trust stations with many exchanges in "
             "different directions.\n\n"
+            "Also per station: partners (distinct stations it exchanged with), median_km and max_km "
+            "to them, farthest (that station), bands, heard_db (median SNR others reported for its "
+            "signal) and hears_db (median SNR it reported for others).\n\n"
             "Needs lots of data: DK3BA recommends averaging at least 100 exchanges per station; an "
             "hour of decoding gives a few.").format(floor=bal.FLOOR_DB, comp=bal.COMPRESS_DB)
 
@@ -156,12 +166,18 @@ class StationBalanceAlgorithm(QgsProcessingAlgorithm):
                 by_band[key].append(bal.TwoWay(r["a"], r["b"], r["ab"], r["ba"]))
             contrast_rows[key] += bal.exchange_contrasts(r["a"], r["b"], r["ab"], r["ba"], r["ma"], r["mb"])
 
+        facts = cor.station_facts(
+            [cor.Record(r["a"], r["ga"] if isinstance(r["ga"], str) else "", r["b"],
+                        r["gb"] if isinstance(r["gb"], str) else "", r["band"], r["ab"], r["ba"]) for _, _, r in rows],
+            per_band)
+
         fields = QgsFields()
         for name, kind in (("call", STRING), ("band", STRING), ("grid", STRING), ("balance_db", DOUBLE),
                            ("std_err_db", DOUBLE), ("n_two_way", INT), ("group_size", INT), ("verdict", STRING),
                            ("n_censored", INT), ("n_dropped", INT),
                            ("hears_vs_me_db", DOUBLE), ("n_vs_me", INT), ("n_vs_me_skipped", INT),
-                           ("is_me", INT)):
+                           ("is_me", INT), ("partners", INT), ("median_km", DOUBLE), ("max_km", DOUBLE),
+                           ("farthest", STRING), ("bands", STRING), ("heard_db", DOUBLE), ("hears_db", DOUBLE)):
             fields.append(field(name, kind, 0))
         sink, dest = self.parameterAsSink(parameters, self.OUTPUT, context, fields, QgsWkbTypes.Point, WGS84)
         if sink is None:
@@ -191,7 +207,8 @@ class StationBalanceAlgorithm(QgsProcessingAlgorithm):
                                  b.n_censored if b else 0, b.n_dropped if b else 0,
                                  round(c.hears_vs_me_db, 1) if c else None, c.n if c else 0,
                                  c.n_skipped if c else 0,
-                                 int(bool(me) and base_callsign(call) == me)])
+                                 int(bool(me) and base_callsign(call) == me),
+                                 *_facts(facts.get((key, call)))])
                 sink.addFeature(f, QgsFeatureSink.FastInsert)
                 written += 1
         feedback.pushInfo(self.tr("{} station row(s): {}; {} without a grid left out").format(

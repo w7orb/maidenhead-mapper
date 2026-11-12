@@ -10,7 +10,7 @@ about=For amateur (ham) radio operators.
     WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
     Ionosphere: check any paths against KC2G's current maps or the CCIR monthly-median model: path MUF, hops at the layer height, and which contacts F2 can't explain.
     No extra Python packages needed.
-version=0.9.3
+version=0.10.0
 author=Cody Tews
 email=cwtews@gmail.com
 homepage=https://github.com/cwtews/maidenhead-mapper
@@ -23,6 +23,9 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.10.0
+    - New: Summarize exchanges by grid pair (corridors): one line per cell pair and band with medians each way, two-way difference, stations at each end, hours active and propagation-mode counts
+    - Station balance: partners, median/max distance, farthest partner, bands, heard_db and hears_db per station
     0.9.3
     - Station balance: std_err_db now reflects the real 6-8 dB scatter between reports (stations seen once no longer shrink it; leverage-corrected robust scale, 7 dB prior), so 'uncertain' works; help text no longer cut off
     - Create grid: cell edges densified and kept off projection seams, so the grid draws correctly on Americas- or Pacific-centred maps
