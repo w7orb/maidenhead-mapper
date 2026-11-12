@@ -360,6 +360,7 @@ class PathIono:
     fof2_mhz: Optional[float] = None         # lowest over the control points
     muf_mhz: Optional[float] = None          # P.533 F2 basic MUF of the path (lowest control point)
     points: List[tuple] = field(default_factory=list)  # control points: (lon, lat, fof2, hmf2, mufd, muf)
+    hops_muf: Optional[int] = None           # P.533 hop count the MUF is computed with (n0, or nM on long paths)
 
 
 def analyse_path(lon1, lat1, lon2, lat2, freq_mhz, cond: Conditions,
@@ -384,14 +385,18 @@ def analyse_path(lon1, lat1, lon2, lat2, freq_mhz, cond: Conditions,
         if n_new == n and abs(new_height - height) < 5:
             break
         n, height = n_new, new_height
+    # Fewest hops: in P.533 the basic MUF grows with hop length (eq. 3, Cd rises
+    # from 0 at 0 km to 1 at dmax), so more, shorter hops never raise it. A path
+    # above the MUF at the fewest hops is above it at any hop count.
     n, takeoff = _hops.likely_hops(d, height, min_takeoff_deg)
-    rows = _p533_control_points(lon1, lat1, lon2, lat2, d, cond)
-    if rows is None:
+    cp = _p533_control_points(lon1, lat1, lon2, lat2, d, cond)
+    if cp is None:
         return PathIono(STATUS_NO_DATA, n, takeoff)
+    rows, n_muf = cp
     muf = min(r[5] for r in rows)
     return PathIono(STATUS_F2 if freq_mhz <= muf else STATUS_ABOVE, n, takeoff,
                     round(sum(r[3] for r in rows) / len(rows), 1), round(min(r[2] for r in rows), 2),
-                    round(muf, 2), rows)
+                    round(muf, 2), rows, n_muf)
 
 
 def _sample(cond, lon, lat):
@@ -409,10 +414,11 @@ def _sample(cond, lon, lat):
 
 
 def _p533_control_points(lon1, lat1, lon2, lat2, d, cond):
-    """P.533-14 control points with their F2 basic MUF: [(lon, lat, foF2, hmF2, MUF(3000), MUF)]."""
+    """P.533-14 control points with their F2 basic MUF, and the hop count used:
+    ([(lon, lat, foF2, hmF2, MUF(3000), MUF)], n), or None without data."""
     rows = []
     if d > SHORT_MODEL_MAX_KM:                                   # §5.3.1
-        _, dm = long_path_hops(d)
+        nm, dm = long_path_hops(d)
         for frac in (dm / 2 / d, 1 - dm / 2 / d):
             lon, lat = _along(lon1, lat1, lon2, lat2, frac)
             s = _sample(cond, lon, lat)
@@ -420,7 +426,7 @@ def _p533_control_points(lon1, lat1, lon2, lat2, d, cond):
                 return None
             f2, h, mufd, m3, fh, _ = s
             rows.append((lon, lat, f2, h, mufd, f2_muf_long(dm, f2, m3, fh)))
-        return rows
+        return rows, nm
     mlon, mlat = _along(lon1, lat1, lon2, lat2, 0.5)
     s = _sample(cond, mlon, mlat)
     if s is None:
@@ -429,7 +435,7 @@ def _p533_control_points(lon1, lat1, lon2, lat2, d, cond):
     n0 = lowest_order_hops(d, mirror_height_km(m3))
     dmax = min(p533_dmax(m3, x), DMAX_CAP_KM)                     # at the mid-path control point
     if d <= dmax:                                                 # §3.5.1.1
-        return [(mlon, mlat, f2, h, mufd, f2_muf(d / n0, f2, m3, fh, x, dmax))]
+        return [(mlon, mlat, f2, h, mufd, f2_muf(d / n0, f2, m3, fh, x, dmax))], n0
     d0 = d / n0                                                   # §3.5.1.2
     for frac in (d0 / 2 / d, 1 - d0 / 2 / d):
         lon, lat = _along(lon1, lat1, lon2, lat2, frac)
@@ -438,7 +444,7 @@ def _p533_control_points(lon1, lat1, lon2, lat2, d, cond):
             return None
         f2, h, mufd, m3, fh, x = s
         rows.append((lon, lat, f2, h, mufd, f2_muf(dmax, f2, m3, fh, x, dmax)))
-    return rows
+    return rows, n0
 
 
 def _along(lon1, lat1, lon2, lat2, frac):

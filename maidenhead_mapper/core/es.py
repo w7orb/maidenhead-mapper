@@ -28,6 +28,8 @@ MIN_KM = 500.0
 ES_BANDS = ("12m", "10m", "6m", "4m", "2m")
 VHF_BANDS = ("6m", "4m", "2m", "1.25m", "70cm")
 HIGH, POSSIBLE = "high", "possible"
+# mode_guess values
+MODE_F2, MODE_ES, MODE_ABOVE, MODE_NO_DATA = "F2", "Es", "above MUF", "no data"
 
 
 def max_single_hop_km(height_km=ES_HEIGHT_KM):
@@ -45,6 +47,20 @@ def classify(distance_km, band, f2_status=None, bands=ES_BANDS):
     if f2_status == STATUS_F2:
         return None
     return POSSIBLE
+
+
+def mode_guess(distance_km, band, f2_status):
+    """Most likely propagation mode for a path, from the F2 check and the Es rules:
+    'Es' where classify() is 'high' (6m and up at single-Es-hop range, or 12m/10m
+    there when F2 can't support it), else 'F2' / 'above MUF' / 'no data' from
+    the F2 check. Double-hop Es is not considered."""
+    if classify(distance_km, band, f2_status) == HIGH:
+        return MODE_ES
+    if f2_status == STATUS_F2:
+        return MODE_F2
+    if f2_status == STATUS_ABOVE:
+        return MODE_ABOVE
+    return MODE_NO_DATA
 
 
 def foes_min_mhz(freq_mhz, distance_km, height_km=ES_HEIGHT_KM):

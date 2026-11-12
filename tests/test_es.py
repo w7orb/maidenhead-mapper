@@ -39,3 +39,13 @@ def test_cluster():
     assert labels[3] == labels[4] == 2
     assert len({labels[5], labels[6], 1, 2}) == 4
     assert es.cluster([]) == []
+
+
+def test_mode_guess():
+    from maidenhead_mapper.core import iono
+    assert es.mode_guess(1500, "6m", iono.STATUS_F2) == es.MODE_ES            # 6m at Es range: Es regardless
+    assert es.mode_guess(1500, "10m", iono.STATUS_ABOVE) == es.MODE_ES        # 10m above F2 MUF at Es range
+    assert es.mode_guess(1500, "10m", iono.STATUS_F2) == es.MODE_F2
+    assert es.mode_guess(4000, "10m", iono.STATUS_ABOVE) == es.MODE_ABOVE     # beyond one Es hop
+    assert es.mode_guess(1500, "20m", iono.STATUS_ABOVE) == es.MODE_ABOVE     # not an Es band
+    assert es.mode_guess(1500, "10m", iono.STATUS_NO_DATA) == es.MODE_NO_DATA

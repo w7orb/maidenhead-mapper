@@ -102,7 +102,11 @@ Two sources, chosen per path (*Ionosphere source*; `iono_source` records which w
 
     This is the *basic* MUF. P.533's operational MUF is higher, by 10–20% or more, so contacts slightly above it are common, especially on long paths;
   - `f2_status`: **F2** (the band is at or below the MUF), **above F2 MUF** (not explained by simple F2 hops: sporadic-E, scatter, long path, or the map is off), or **no data**;
-  - `bands_f2`: which of the path's bands F2 supports.
+  - `bands_f2`: which of the path's bands F2 supports;
+  - `hops_muf`: the hop count the MUF is computed with (P.533: hops of at most 4,000 km at 3° or more; it can be one more than `hops_iono`, which allows 2°). More hops never raise the basic MUF, so a path above it at the fewest hops is above it at any count;
+  - `mode_guess`: **Es** where sporadic-E is the likely explanation (6m and up at single-Es-hop range, or 12m/10m there above the F2 MUF), else **F2**, **above MUF** or **no data**.
+
+  Tick *Also write the results into the input layer* to add these fields to the input layer itself (memory or GeoPackage, e.g. a saved session) as well as the output layer. It's skipped with a warning if the layer is being edited or can't be changed. Exchanges that arrive later, or a timeline rebuild, leave the fields empty; run it again to refill.
   With *Auto*, recent paths use KC2G and older ones the CCIR model. A band stands for its FT8 frequency; a station on several bands is judged on its highest. Optional output: **reflection points**, with `kind` *hop* (where each hop meets the layer; grey dots) and *control point* (where P.533 judges the MUF, coloured by whether the band fits).
 - Near a current, trusted ionosonde (confidence 50 or higher), the maps are corrected towards its measurements; the correction fades out over about 1,000 km. Contour maps can't show peaks above their top level (MUF(3000) stops at 28 MHz), and this fills that in where there's an ionosonde.
 

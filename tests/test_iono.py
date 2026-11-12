@@ -165,3 +165,28 @@ def test_long_paths_use_p533_control_points():
     assert 18.0 < r.muf_mhz < 20.0
     assert r.status == iono.STATUS_F2 and r.hops == 3        # hops: likely count, 2 deg off hmF2
     assert iono.analyse_path(0, 0, lon2, 0, 21.0, middle).status == iono.STATUS_ABOVE
+
+
+def test_more_hops_never_raise_the_basic_muf():
+    # P.533 eq. (3): the basic MUF grows with hop length up to dmax, so splitting a
+    # path into more, shorter hops can only lower it. This is why analyse_path keeps
+    # the fewest hops: a path above the MUF there is above it at any hop count.
+    for m3 in (2.6, 3.0, 3.6):
+        for x in (2.0, 3.5):
+            dmax = min(iono.p533_dmax(m3, x), iono.DMAX_CAP_KM)
+            prev = None
+            for d in range(100, int(dmax) + 1, 50):     # (dips ~0.02 MHz below 50 km: fH term)
+                muf = iono.f2_muf(d, 7.0, m3, 0.8, x, dmax)
+                assert prev is None or muf >= prev - 1e-9
+                prev = muf
+    for d in (3000, 6000, 12000):     # and the long-path model: fewer, longer hops are higher too
+        n, dm = iono.long_path_hops(d)
+        assert iono.f2_muf_long(dm, 7.0, 3.0, 0.8) >= iono.f2_muf_long(d / (n + 1), 7.0, 3.0, 0.8)
+
+
+def test_hops_muf_is_the_p533_hop_count():
+    r = iono.analyse_path(0, 0, 3000 / 111.195, 0, 14.074, cond())
+    assert r.hops == 1 and r.hops_muf == 1
+    r = iono.analyse_path(0, 0, 10000 / 111.195, 0, 18.0, iono.Conditions(None, flat(20.0), flat(7.0), flat(300.0)))
+    assert (r.hops, r.hops_muf) == (3, 4)        # 2 deg geometric minimum vs P.533's 3 deg / 4,000 km rule
+    assert iono.analyse_path(0, 0, 0.001, 0, 14.0, cond()).hops_muf is None

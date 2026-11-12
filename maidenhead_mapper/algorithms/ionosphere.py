@@ -34,6 +34,7 @@ from qgis.core import (
 from qgis.PyQt.QtCore import QCoreApplication, QUrl
 from qgis.PyQt.QtNetwork import QNetworkRequest
 
+from ..core import es
 from ..core import hops as hops_mod
 from ..core import iono
 from ..core import maidenhead as mh
@@ -383,10 +384,11 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
     R12 = "R12"
     OUTPUT = "OUTPUT"
     REFLECTIONS = "REFLECTIONS"
+    UPDATE_INPUT = "UPDATE_INPUT"
 
     NEW_FIELDS = [("iono_utc", DATETIME), ("iono_source", STRING), ("iono_note", STRING), ("freq_mhz", DOUBLE), ("f2_status", STRING),
                   ("muf_mhz", DOUBLE), ("fof2_mhz", DOUBLE), ("hmf2_km", DOUBLE), ("hops_iono", INT),
-                  ("takeoff_iono", DOUBLE), ("bands_f2", STRING)]
+                  ("takeoff_iono", DOUBLE), ("hops_muf", INT), ("mode_guess", STRING), ("bands_f2", STRING)]
 
     def tr(self, text):
         return QCoreApplication.translate("CheckPathsAlgorithm", text)
@@ -417,6 +419,13 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             "ones), with fof2_mhz and hmf2_km at those control points\n"
             "• f2_status: 'F2' if the band is at or below the MUF, 'above F2 MUF' if not (the "
             "contact used sporadic-E, scatter, or the map is off), 'no data'\n"
+            "• hops_muf: the hop count the MUF is computed with (P.533: hops of at most 4,000 km at "
+            "3° or more). It can be one more than hops_iono, which allows 2°. More hops never raise "
+            "the MUF (shorter hops have a lower one), so a path above the MUF is above it at any "
+            "hop count\n"
+            "• mode_guess: 'Es' where sporadic-E is the likely explanation (6m and up at single-Es-hop "
+            "range, 500–2,300 km; or 12m/10m there when F2 can't support it), else 'F2', 'above MUF' "
+            "or 'no data'. hops_iono/takeoff_iono stay the F2 values\n"
             "• bands_f2: which of the path's bands F2 supports\n\n"
             "Exchange layers use grid_a/grid_b; station layers use grid and My grid. The band's FT8 "
             "frequency stands for it; a station on several bands is judged on its highest.\n\n"
@@ -428,7 +437,12 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             "• CCIR model only (ITU-R P.1239, as in IRI): the monthly median for the path's own date, "
             "time and sunspot number, so past logs can be checked. Typical conditions, not that "
             "day's: expect foF2 within ~20%. The sunspot number comes from SILSO (Royal "
-            "Observatory of Belgium) or KC2G, or enter one.")
+            "Observatory of Belgium) or KC2G, or enter one.\n\n"
+            "Also write the results into the input layer: adds these fields to the input layer "
+            "itself (memory or GeoPackage, e.g. a saved live session) as well as making the output "
+            "layer. Skipped with a warning if the layer can't be changed or is being edited. On a "
+            "live or session layer, exchanges that arrive later get empty values, and an Activity "
+            "timeline rebuild empties them; run the tool again to refill.")
 
     def initAlgorithm(self, config=None):  # noqa: N802
         self.addParameter(QgsProcessingParameterFeatureSource(
@@ -451,6 +465,8 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(QgsProcessingParameterFeatureSink(
             self.REFLECTIONS, self.tr("Reflection points"), QgsProcessing.TypeVectorPoint,
             optional=True, createByDefault=True))
+        self.addParameter(QgsProcessingParameterBoolean(
+            self.UPDATE_INPUT, self.tr("Also write the results into the input layer"), defaultValue=False))
 
     def processAlgorithm(self, parameters, context, feedback):  # noqa: N802
         # Paths are read from grid fields, not geometry: don't reject odd geometries
@@ -467,6 +483,13 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             raise QgsProcessingException(self.tr(str(exc)))
         if not reader.exchanges:
             feedback.pushInfo(self.tr("My grid: {}").format(my_grid))
+        self._update = None          # (layer id, {fid: {field: value}}), applied in postProcessAlgorithm
+        if self.parameterAsBool(parameters, self.UPDATE_INPUT, context):
+            in_layer = self.parameterAsVectorLayer(parameters, self.INPUT, context)
+            if in_layer is None:
+                feedback.reportError(self.tr("Can't write into the input: it isn't a loaded layer."))
+            else:
+                self._update = (in_layer.id(), {})
 
         src = IonoSource(feedback, self.parameterAsEnum(parameters, self.SOURCE, context),
                          self.parameterAsDouble(parameters, self.MAX_AGE, context),
@@ -525,7 +548,12 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             if result:
                 out["muf_mhz"], out["fof2_mhz"], out["hmf2_km"] = result.muf_mhz, result.fof2_mhz, result.hmf2_km
                 out["hops_iono"], out["takeoff_iono"], out["bands_f2"] = result.hops, result.takeoff_deg, bands_ok
+                out["hops_muf"] = result.hops_muf
+            if p["ok"] and freq is not None:
+                out["mode_guess"] = es.mode_guess(mh.distance_bearing(ga, gb)[0], band, status)
             sink.addFeature(out, QgsFeatureSink.FastInsert)
+            if self._update is not None:
+                self._update[1][f.id()] = {name: out[name] for name, _ in self.NEW_FIELDS}
             if rsink is not None and result:
                 # Hop reflection points (where each hop meets the layer) ...
                 (x1, y1), (x2, y2) = mh.center(ga), mh.center(gb)
@@ -559,6 +587,51 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
                 source.sourceName() or "Paths"),
                                   styling.LayerStyler(_reflection_renderer))
         return results
+
+
+    def postProcessAlgorithm(self, context, feedback):  # noqa: N802
+        """Main thread: write the results into the input layer if asked."""
+        upd, self._update = getattr(self, "_update", None), None
+        if upd:
+            write_into_layer(upd[0], upd[1], self.NEW_FIELDS, context, feedback, self.tr)
+        return {}
+
+
+def write_into_layer(layer_id, values, new_fields, context, feedback, tr=lambda t: t):
+    """Add any missing new_fields to the layer and set values {fid: {name: value}}
+    through its data provider. Returns the number of features written."""
+    from qgis.core import QgsProject, QgsVectorDataProvider
+    layer = QgsProject.instance().mapLayer(layer_id) or context.getMapLayer(layer_id)
+    if layer is None:
+        feedback.reportError(tr("The input layer is no longer loaded; it was not updated."))
+        return 0
+    dp = layer.dataProvider()
+    caps = dp.capabilities()
+    if layer.isEditable():
+        feedback.reportError(tr("{} is being edited: save or cancel the edits and run again to write the "
+                                "results into it.").format(layer.name()))
+        return 0
+    if layer.readOnly() or not (caps & QgsVectorDataProvider.ChangeAttributeValues):
+        feedback.reportError(tr("{} can't be changed; the results are only in the output layer.").format(
+            layer.name()))
+        return 0
+    have = set(layer.fields().names())
+    missing = [field(n, k, 0) for n, k in new_fields if n not in have]
+    if missing:
+        if not (caps & QgsVectorDataProvider.AddAttributes) or not dp.addAttributes(missing):
+            feedback.reportError(tr("Couldn't add fields to {}; the results are only in the output layer.").format(
+                layer.name()))
+            return 0
+        layer.updateFields()
+    idx = {n: layer.fields().indexOf(n) for n, _ in new_fields}
+    changes = {fid: {idx[n]: v for n, v in vals.items() if idx.get(n, -1) >= 0} for fid, vals in values.items()}
+    if changes and not dp.changeAttributeValues(changes):
+        feedback.reportError(tr("Writing into {} failed: {}").format(layer.name(), "; ".join(dp.errors()[-3:])))
+        return 0
+    layer.triggerRepaint()
+    feedback.pushInfo(tr("Wrote the results into {} ({} feature(s), {} new field(s)).").format(
+        layer.name(), len(changes), len(missing)))
+    return len(changes)
 
 
 def _r(v, n):

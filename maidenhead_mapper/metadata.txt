@@ -10,7 +10,7 @@ about=For amateur (ham) radio operators.
     WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
     Ionosphere: check any paths against KC2G's current maps or the CCIR monthly-median model: path MUF, hops at the layer height, and which contacts F2 can't explain.
     No extra Python packages needed.
-version=0.9.1
+version=0.9.2
 author=Cody Tews
 email=cwtews@gmail.com
 homepage=https://github.com/cwtews/maidenhead-mapper
@@ -23,6 +23,9 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.9.2
+    - Check paths: option to also write the results into the input layer (memory or GeoPackage, e.g. a saved session)
+    - Check paths: hops_muf (the P.533 hop count behind the MUF) and mode_guess (F2 / Es / above MUF / no data)
     0.9.1
     - Skip distance accepts ADIF QSO and worked-station layers and any layer with grids, and the running live map; clearer errors
     - A saved session GeoPackage loaded into any project is recognised from its tables (Activity timeline, Skip distance, Antenna A/B)
