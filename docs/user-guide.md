@@ -66,7 +66,7 @@ Everything is under *Plugins → Maidenhead Mapper*, and under the Maidenhead Ma
 | Grid | Create Maidenhead grid… |
 | PSK Reporter | Fetch from PSK Reporter…, Import PSK Reporter reports… |
 | WSJT-X | WSJT-X live map (panel), Import WSJT-X ALL.TXT…, Import ADIF log (.adi / .adx)…, Summarize exchanges by grid pair…, Propagation over time (panel), Station balance from two-way reports…, Antenna A/B comparison…, Export research dataset… |
-| Ionosphere | Fetch ionosphere (KC2G)…, Check paths against the ionosphere (MUF)…, Find sporadic-E paths…, Skip distance by hour… |
+| Ionosphere | Fetch ionosphere (KC2G)…, Check paths against the ionosphere (MUF)…, Predict paths with VOACAP…, Find sporadic-E paths…, Skip distance by hour… |
 | (top level) | Activity timeline (panel) |
 
 The ionosphere tools work on any station or exchange layer, from any source. They are not part of the live map.
@@ -97,6 +97,8 @@ Every tool is also in the **Processing Toolbox** (*Processing → Toolbox*) unde
 | **Research export** | A table with one row per observed SNR (who transmitted, who received, when, on which band, and the path), for merging with other operators' data and for propagation research. See [7.8](#78-export-research-dataset). |
 | **Censored** | A value known only to be at or below a limit. FT8 reports stop near −24 dB, so a report there may stand for a weaker signal. |
 | **Sunspot number (R12)** | The 12-month smoothed sunspot number. The CCIR model uses it to scale the ionosphere to the solar cycle. |
+| **VOACAP** | The standard HF prediction program from NTIA/ITS. It predicts a path's MUF, mode, SNR and reliability for a month, hour and sunspot number. You install it yourself; see [8.5](#85-predict-paths-with-voacap). |
+| **REL** | VOACAP's reliability: the share of the month's days on which the SNR reaches the required SNR (for FT8, about −21 dB). |
 
 ## 5. Grid: Create Maidenhead grid
 
@@ -1103,6 +1105,96 @@ Checking one row by hand: 20:00 UTC, skip edge 1,429 km on 15m (21.074 MHz). A h
 - **Compare bands.** Switch between 20m and 15m every hour during an afternoon to see how the skip edge depends on frequency.
 - **Use the timeline.** Select a few hours in the Activity timeline; it shows the skip edge per band for just those hours.
 
+### 8.5 Predict paths with VOACAP
+
+Runs **VOACAP** for every path in a line layer and compares its prediction with what was heard.
+
+VOACAP is the standard HF prediction program, from NTIA/ITS (the US government's telecommunications lab). For a path, an hour, a month and a sunspot number it predicts the MUF, the mode (e.g. `2F2`: two F2 hops), the takeoff angle, the signal and noise, the SNR, and the **reliability (REL)**: on what share of the month's days the signal is strong enough. It includes absorption, noise, antennas and power, which *Check paths* does not.
+
+The plugin does **not** include VOACAP. It runs your own copy.
+
+#### Install VOACAP
+
+- **Windows**: download the ITS HF propagation package (*itshfbc*) from the [ITS VOACAP page](https://its.ntia.gov/software/high-frequency/voacap-propagation-model/) and install it in the default folder, `C:\itshfbc`. Don't install it under *Program Files* (the program can't handle spaces in the path). It is free.
+- **Linux / macOS**: install **voacapl** (Debian/Ubuntu: `sudo apt install voacapl`; or build it from [github.com/jawatson/voacapl](https://github.com/jawatson/voacapl)), then run `makeitshfbc` once to create `~/itshfbc`.
+
+If you installed it somewhere else, enter the folder in the tool once; it is remembered.
+
+The tool runs VOACAP in the background, on a hidden desktop on Windows, so no VOACAP windows appear. A run that takes too long is stopped. It uses its own input and output files in VOACAP's `run` folder and deletes them afterwards.
+
+| Setting | Default | Notes |
+|---|---|---|
+| Paths | | A line layer from this plugin: exchanges, *Summarize exchanges* corridors, *Corridors over time*, or *Check paths* output. |
+| VOACAP folder | the saved one, else `C:\itshfbc` | The *itshfbc* folder. Empty on Linux/macOS means `~/itshfbc`. |
+| Month | from each path's date | Or a fixed month. |
+| Sunspot number SSN | 0 = look it up | The 12-month smoothed number for the path's month, as for the CCIR model. For recent months, which have no smoothed value yet, the latest smoothed value is used. |
+| Transmit power at each end (W) | 100 | Both stations are assumed to run this. |
+| Transmit / receive antenna gain (dBi) | 0 / 0 | Both ends use VOACAP's isotrope: the same gain in every direction and at every angle. |
+| Man-made noise at the receiver | Residential, −145 dBW | At 3 MHz, in 1 Hz (ITU-R P.372). Also *City* −140, *Rural* −150, *Quiet rural* −164. |
+| Required SNR for REL | −21 dB | As WSJT-X reports it. VOACAP gets −21 + 34 = 13 dB in 1 Hz. |
+| Label paths with the gap | off | |
+| Paths with VOACAP | temporary layer | A copy of the input with new fields. |
+
+**Which path, hour and frequency.** Each line runs from its first point (A) to its last (B), and is predicted both ways. The frequency is the band's FT8 frequency; a corridor on several bands uses the highest, as *Check paths* does (run it per band for clean comparisons). The hour is:
+
+- *Corridors over time*: the frame's start hour;
+- *Summarize exchanges* corridors: the middle of `first_utc`..`last_utc` (a note says when that spans more than 2 hours);
+- exchanges: `first_utc`, to the nearest hour.
+
+**Fixed settings.** Method 30 (VOACAP's recommended short/long path smoothing), CCIR foF2 maps, no sporadic-E, a minimum takeoff angle of 3° (VOACAP's own default), required reliability 90%. VOACAP covers 2–30 MHz, so 160m and 6m paths get a note and no prediction.
+
+**New fields**:
+
+| Field | Meaning |
+|---|---|
+| `voacap_ok` | 1 when VOACAP gave a prediction. |
+| `voacap_note` | Why there is none, or a warning (several bands, a long time span, above VOACAP's MUF). |
+| `voacap_utc`, `voacap_ssn`, `voacap_freq` | The hour, sunspot number and frequency (MHz) used. |
+| `voacap_muf` | VOACAP's MUF for the path (MHz): the median over the month's days. |
+| `voacap_mufday` | Share of the month's days the frequency is below the MUF. |
+| `voacap_mode` | The most reliable mode, e.g. `1F2`, `2F2`, `1 E`. `F2F2` means VOACAP's long-path model (over about 7,000 km). |
+| `voacap_tangle_deg` | Takeoff angle of that mode, degrees. |
+| `voacap_rel` | **REL**: share of the month's days the SNR reaches the required SNR (0–1), mean of both directions. |
+| `voacap_snr_hz` | VOACAP's SNR in 1 Hz (dB), mean of both directions. |
+| `voacap_snr_db` | The same as WSJT-X would report it, in 2500 Hz: `voacap_snr_hz` − 34 dB. |
+| `voacap_snr_ab_db`, `voacap_snr_ba_db` | Predicted SNR (2500 Hz) from A to B and from B to A. They differ by the noise at each receiver. |
+| `voacap_sdbw` | Signal power at the receiver, dBW (A to B). |
+| `obs_snr_db` | The observed SNR: the layer's `snr_db` (corridors), else the mean of the two reports (exchanges). |
+| `snr_gap_db` | **Observed − predicted** (`obs_snr_db` − `voacap_snr_db`), dB. |
+| `gap_a_to_b_db`, `gap_b_to_a_db` | The same per direction: `a_to_b_db` (or `b_hears_a`) and `b_to_a_db` (or `a_hears_b`) against the prediction that way. |
+
+The log gives the median gap, the middle half of the gaps, and how many heard paths VOACAP rated below 10% REL.
+
+**Style**: lines coloured by `snr_gap_db`, red where the path was heard weaker than predicted, blue where stronger, grey within 3 dB; dotted grey where there is no gap.
+
+#### How to read snr_gap_db
+
+- **Near 0**: the path was about as strong as VOACAP's monthly median.
+- **Positive**: heard stronger than predicted. Common when the far station runs more power or a better antenna than assumed, or when the band was better than its median that day.
+- **Negative**: heard weaker than predicted: less power, a poorer antenna, more noise, or a worse day.
+- **Very large and positive (+50 dB or more)**: VOACAP puts the frequency above the MUF on most days (see `voacap_mufday` and the note), so its SNR is meaningless. These paths are the ones the monthly median says shouldn't be open; count them rather than averaging them.
+- Look at the **median over many paths**, by distance or direction, not at single lines. One FT8 report fades by 10–20 dB from minute to minute.
+
+#### Example
+
+The corridors over time for 22:00–23:00 UTC on 11 November 2026 (one evening on 15m, cells = fields), with the defaults and SSN 88.6 (the latest smoothed value): VOACAP predicted all 168 corridors. For the 131 with reports, the median gap was −0.5 dB, with the middle half from −9 to +6 dB. Corridors under 5,000 km were heard weaker than predicted (median about −10 to −14 dB); corridors over 9,000 km were heard stronger (+5 dB). 12 of the 131 (9%) were paths VOACAP gave less than 10% REL.
+
+#### Limits
+
+- **Monthly medians.** VOACAP describes a typical day of the month at that sunspot number, not a given evening. Judge it over many days.
+- **Assumed stations.** Both ends get the same power and an isotrope antenna. The real stations' power and antennas are unknown and differ a lot.
+- **Censoring.** Only decoded signals are reported. Signals below about −21 dB are never seen, so observed medians are too optimistic, most on weak paths.
+- **1 Hz vs 2500 Hz.** VOACAP's SNR is in 1 Hz; WSJT-X's in 2500 Hz. The tool subtracts 34 dB. FT8's real decode threshold also depends on the decoder.
+- **Corridor centres.** Corridors run between cell centres, not the stations' squares, so distances and hops are approximate, most with field-sized cells.
+- **Noise** is set for both ends. Real noise at each station varies by 10–20 dB.
+- Results are cached by path, month, sunspot number, hour, frequency and settings, so a second run is fast.
+
+#### Try this
+
+- **Find the model's bias.** Run it on a week of corridors over time for one band, then plot `snr_gap_db` against `distance_km` with DataPlotly.
+- **Compare with Check paths.** Run *Check paths* first, then this tool on its output: compare `muf_mhz` (basic MUF, ITU-R P.533) with `voacap_muf`.
+- **Set your own station.** For exchanges with you at one end, set the power and antenna gain closer to your station and see how the gap moves.
+
 ## 9. Activity timeline
 
 The top-level **Activity timeline** entry opens a panel under the map: a bar chart of activity per UTC hour that also filters the map.
@@ -1224,6 +1316,8 @@ Plus:
 
 **Reflection points** (from *Check paths*): `path_fid`, `calls`, `kind` (*hop* or *control point*), `n` (number along the path), `hops`, `fof2_mhz`, `hmf2_km`, `mufd_mhz`, `point_muf_mhz` (control points: the MUF judged there), `freq_mhz`, `f2_status`.
 
+**Paths with VOACAP** (from *Predict paths with VOACAP*): the input layer's fields, plus `voacap_ok`, `voacap_note`, `voacap_utc`, `voacap_ssn`, `voacap_freq`, `voacap_muf`, `voacap_mufday`, `voacap_mode`, `voacap_tangle_deg`, `voacap_rel`, `voacap_snr_hz` (1 Hz), `voacap_snr_db` (2500 Hz), `voacap_snr_ab_db`, `voacap_snr_ba_db`, `voacap_sdbw`, `obs_snr_db`, `snr_gap_db`, `gap_a_to_b_db`, `gap_b_to_a_db`. See [8.5](#85-predict-paths-with-voacap).
+
 **Sporadic-E candidates**: `path_fid`, `calls`, `grid_a`, `grid_b`, `band`, `freq_mhz`, `distance_km`, `takeoff_es`, `foes_min_mhz`, `f2_status`, `confidence` (*high*/*possible*), `cloud`, `last_utc`.
 
 **Sporadic-E clouds**: `cloud`, `n_paths`, `bands`, `foes_max_mhz`, `high` (high-confidence candidates), `first_utc`, `last_utc`.
@@ -1329,6 +1423,7 @@ The plugin keeps downloads in your QGIS profile folder. On Windows this is `%APP
 |---|---|
 | `maidenhead_mapper\kc2g\` | KC2G cache: `stations.json`, `mufd.geojson`, `fof2.geojson`, `hmf2.geojson`, `essn.json`, `meta.json`. Refreshed at most every 15 minutes. |
 | `maidenhead_mapper\alltxt_index\` | One small JSON index per ALL.TXT file used in *Propagation over time*: time span, bands, decodes per hour and where each day starts. Extended when the file grows; rebuilt if it was replaced. |
+| `maidenhead_mapper\voacap\` | `predictions.json`: VOACAP results by path, month, sunspot number, hour, frequency and settings. `last_failed.dat`/`.out`: the input and output of the last failed VOACAP run, for troubleshooting. |
 | `maidenhead_mapper\ccir\` | CCIR model coefficients `ccir11.asc`–`ccir22.asc` (~0.5 MB, downloaded once), and SILSO sunspot numbers `smoothed.csv` and `monthly.csv` (refreshed weekly). |
 
 Your own data stays where you put it:
@@ -1342,11 +1437,18 @@ Your own data stays where you put it:
 - `mycall`, `mygrid`: your callsign and grid;
 - `psk_folder`: the last PSK Reporter folder;
 - `live/…`: the live panel's mode, address, port, fade, save and folder;
-- `propagation_files`: the ALL.TXT files last used in *Propagation over time*.
+- `propagation_files`: the ALL.TXT files last used in *Propagation over time*;
+- `voacap_dir`: the VOACAP (*itshfbc*) folder, when it isn't `C:\itshfbc`.
 
 Deleting the cache folders is safe; the data is downloaded again when needed.
 
 ## 12. Troubleshooting
+
+**Predict paths with VOACAP: "VOACAP was not found"**
+Install VOACAP (see [8.5](#85-predict-paths-with-voacap)). On Windows the tool looks for `bin_win\voacapw.exe` and a `run` folder under `C:\itshfbc` or the folder you enter. On Linux/macOS, `voacapl` must be on the PATH and `~/itshfbc` must exist (run `makeitshfbc`).
+
+**Predict paths with VOACAP: "VOACAP stopped without finishing its output"**
+The input and output of the failed run are in `maidenhead_mapper\voacap\` in your QGIS profile (`last_failed.dat`, `last_failed.out`). Check that the `run` folder in *itshfbc* is writable.
 
 **Live map: "Could not listen on 127.0.0.1:2237"**
 Another program (JTAlert, GridTracker, a logger) owns the port in unicast mode. Switch everything to multicast `239.255.0.1:2237` (see [7.1](#71-wsjt-x-live-map)).
@@ -1407,6 +1509,7 @@ For KC2G, the paths must be within the time limit (3 hours by default) of KC2G's
 - **Plugin**: GNU General Public License v3 or later (see `LICENSE`).
 - **KC2G** ([prop.kc2g.com](https://prop.kc2g.com)): ionosonde data and MUF/foF2/hmF2 maps, built from GIRO and INGV ionosondes over IRI-2020. A volunteer service; please use it gently.
 - **CCIR coefficients**: the ITU-R P.1239 (CCIR) foF2 and M(3000) coefficient files as distributed with IRI, downloaded from the MIT-licensed [space-physics/iri2016](https://github.com/space-physics/iri2016) repository (pinned to one commit).
+- **VOACAP**: by NTIA/ITS, not included; the plugin runs your installed copy (Windows *itshfbc*, or J. A. Watson's [voacapl](https://github.com/jawatson/voacapl) port). The deck and output formats follow voacapl's source and sample files; two sample files from voacapl (public domain / CC0) are used in the plugin's tests.
 - **Sunspot numbers**: WDC-SILSO, Royal Observatory of Belgium, Brussels. Licensed CC BY-NC 4.0 (non-commercial use).
 - **Methods**: ITU-R P.533-14 (HF path MUF), ITU-R P.1239 (ionospheric reference characteristics). The station-balance method follows DK3BA's (2024) analysis of FT8 report statistics.
 - **Modified dip latitude**: a grid derived from the IGRF magnetic field model, shipped with the plugin.

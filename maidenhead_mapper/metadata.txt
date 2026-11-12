@@ -9,21 +9,25 @@ about=For amateur (ham) radio operators.
     Activity timeline: a reports-per-hour chart for any of these; drag across it to map only those hours.
     WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
     Ionosphere: check any paths against KC2G's current maps or the CCIR monthly-median model: path MUF, hops at the layer height, and which contacts F2 can't explain.
+    Predict paths with VOACAP: runs your installed VOACAP (not included) on exchanges and corridors and adds its MUF, mode, REL and SNR, and the gap between what was heard and what it predicts.
     Export research dataset: one CSV row per observed SNR from ALL.TXT (exchange reports and your decodes, with path, control points and day/night), optionally pseudonymised, for sharing with other operators and researchers.
     No extra Python packages needed.
-version=0.13.0
+version=0.14.0
 author=Cody Tews
 email=w7orb.radio@gmail.com
 homepage=https://github.com/w7orb/maidenhead-mapper
 repository=https://github.com/w7orb/maidenhead-mapper
 tracker=https://github.com/w7orb/maidenhead-mapper/issues
 license=GPL-3.0-or-later
-tags=ham radio,amateur radio,maidenhead,grid locator,wsjt-x,ft8,psk reporter,udp,live,ionosphere,muf,propagation
+tags=ham radio,amateur radio,maidenhead,grid locator,wsjt-x,ft8,psk reporter,udp,live,ionosphere,muf,propagation,voacap
 category=Vector
 icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.14.0
+    - New: Predict paths with VOACAP (Ionosphere): runs the user's installed VOACAP (NTIA/ITS itshfbc on Windows, voacapl on Linux/macOS; not included) for exchanges, corridors, corridors over time and Check paths output, both directions. Adds voacap_muf, voacap_mode, voacap_tangle_deg, voacap_rel, voacap_snr_db (2500 Hz, = 1 Hz SNR - 34 dB), voacap_snr_hz and snr_gap_db = observed - predicted, coloured by the gap. Many paths per VOACAP run; results cached. On Windows VOACAP runs on a hidden desktop with a timeout, so no windows appear
+    - Tests: deck and output parsing against real VOACAP 16.1207W output and voacapl's sample files; a check against the real program when installed; QGIS smoke check
     0.13.0
     - New: reference-antenna mode for Antenna A/B comparison. Give a modelled pattern for one antenna (CSV of azimuth_deg, elevation_deg, gain_dbi, or a 4nec2 / NEC-2 output file with its RADIATION PATTERNS tables) and its orientation; each pair gets ref_gain_dbi and the other antenna's abs_gain_dbi, and the bins add abs_dbi with a 95% interval, abs_n and ref_dbi
     - New: optional matched-decodes table from Antenna A/B comparison
