@@ -486,6 +486,9 @@ Keep both running for as long as you can. A few hours gives a direction pattern;
 | My grid (where both antennas are) | stored grid | |
 | Takeoff angle from | Ionosphere: KC2G when recent, else the CCIR model | Or *CCIR model only*, or *Fixed 300 km layer (geometric)*. |
 | Sunspot number R12 for the model | 0 (look it up) | |
+| Reference antenna pattern | empty | Optional. A CSV or NEC-2 output file; see [Reference antenna](#reference-antenna-absolute-gain). |
+| Reference pattern is antenna | B | Which antenna the pattern describes. |
+| Reference orientation (°) | 0 | Compass bearing of the pattern's azimuth 0 (the model's +X axis). |
 | Wedge radius on the map (km) | 2500 | Only changes the drawing. |
 
 #### Outputs
@@ -493,6 +496,7 @@ Keep both running for as long as you can. A few hours gives a direction pattern;
 - **Antenna A vs B by direction**: 16 wedges around your grid. Green means A is stronger, purple means B is. Labels show the median, the number of pairs, and `+only A/only B`.
 - **Antenna A vs B by station**: one point per station heard.
 - **Antenna A/B by distance and takeoff**: a table with one row for everything, then rows by distance band and by takeoff-angle band (0–3°, 3–6°, 6–10°, 10–15°, 15–25°, 25–90°, and *Es*).
+- **Antenna A/B matched decodes** (off by default): a table with one row per decode from a station with a grid, both pairs and single decodes.
 
 **Read `decode_adv` next to the median.** Below the decode floor (about −20 dB) the weaker antenna doesn't report a low SNR; it reports nothing. A median over matched pairs alone hides that. `only_a`, `only_b` and `decode_adv` show it.
 
@@ -517,8 +521,56 @@ Because the layer rises and falls through the day, the same station is heard at 
 
 - Expect about ±1–2° from layer-height error.
 - A path may use more hops than the fewest, at a much higher angle. Around 3,300 km the estimate can jump between one hop (~2°) and two hops (~14°).
-- The result is a **relative** pattern (A versus B), not absolute gain.
+- The result is a **relative** pattern (A versus B), not absolute gain, unless you give a reference pattern (below).
 - Fading makes single pairs noisy (about 5 dB scatter). Trust bins with about 100 pairs or more.
+
+#### Reference antenna (absolute gain)
+
+A **reference antenna** is a simple antenna whose pattern you can model well, for example a half-wave dipole at a known height over your ground. Make it antenna B. Model it in NEC software and give the tool its pattern. Then, for each pair:
+
+> A's gain (dBi) = B's modelled gain towards that station, at that decode's takeoff angle + the measured A − B
+
+So A's results come out in dBi, with ground effects included, instead of only "better or worse than B". Set *Reference pattern is antenna* to A if the reference is on receiver A; the other antenna's gain is then the reference gain − (A − B).
+
+**Making a pattern.** Three ways:
+
+- **4nec2 or NEC-2.** Model the antenna with real ground and an RP card that covers the full circle of azimuth and 0–90° elevation. For example `RP 0 91 73 1000 90 0 -1 5` (θ from 90° down to 0° in 1° steps, φ 0–360° in 5° steps). Give the tool the output file (4nec2 writes it as `.out`). The tool reads every *RADIATION PATTERNS* table, one per frequency, and uses the TOTAL gain. With several frequencies, each decode uses the nearest one; decodes more than 10% away from every frequency get no reference gain.
+- **A CSV** from any software, or by hand: one row per point, with a header.
+- **EZNEC**: its export formats aren't read. Copy its far-field table into the CSV layout.
+
+The CSV needs columns `azimuth_deg`, `elevation_deg` and `gain_dbi`, separated by commas, semicolons or tabs. Headers are matched loosely (`Az`, `El`, `Gain dBi` also work). Lines starting with `#` are skipped. An optional `frequency_mhz` column lets one file hold several bands. Example (made-up numbers):
+
+```
+# dipole, 14.1 MHz, 10 m high, wire along azimuth 90–270
+azimuth_deg,elevation_deg,gain_dbi
+0,5,-1.8
+0,10,3.4
+90,5,-12.0
+90,10,-6.9
+...
+```
+
+Every azimuth needs a value at every elevation. Give the full circle of azimuths: symmetry isn't assumed. Use small elevation steps (1–2°) from 0 to about 30°, where most DX arrives.
+
+**Conventions.**
+
+- **Elevation** is degrees above the horizon. NEC's THETA is measured from the zenith, so elevation = 90 − THETA.
+- **Azimuth** in the CSV is clockwise, like a compass, from the pattern's reference direction. NEC's PHI is counter-clockwise from the +X axis, so the tool uses azimuth = −PHI.
+- **Orientation** is the compass bearing that the pattern's azimuth 0 (NEC's +X axis) points to. With the default 0, +X points north and NEC's +Y points west. If you drew the model with +X east, enter 90. For a dipole whose wire runs along +X, its broadside lobes then point north and south.
+- A pattern with **one elevation** is taken as the same at every elevation; one with **one azimuth** (for example only azimuth 0 for a vertical) as the same in every direction. Both give a warning.
+- Gain is interpolated bilinearly between pattern points, wrapping through north. Takeoff angles outside the pattern's elevations get no value. NEC prints −999.99 dB where there is no radiation; gains below −40 dBi are raised to −40.
+
+**New fields.** With a pattern, every output adds `abs_n`, `abs_dbi`, `abs_lo_dbi`, `abs_hi_dbi` and `ref_dbi` (see [10.5](#105-analysis-layers)), and the matched decodes table adds `ref_gain_dbi` and `abs_gain_dbi`. The log prints the overall and per-takeoff-band medians.
+
+**Limits.**
+
+- **Only as good as the model.** Ground constants, height, nearby objects and feed-line currents all change a real dipole's pattern. Expect a few dB of model error, most of it at low angles.
+- **The takeoff angle is estimated, not measured** (see above). Near the horizon a dipole's gain changes by several dB per degree, so a 1–2° angle error moves the absolute value there by several dB. A path using more hops than the fewest arrives at a quite different angle.
+- **Censoring.** Only pairs carry an absolute value. Decodes one antenna missed stay counts, as before. Where the measured antenna misses many decodes, its median is too high, because only its stronger decodes are paired. Where the reference misses many, it is too low. Read `decode_adv` next to `abs_dbi`.
+- **The two receivers must match.** A − B includes any fixed receiver offset (gain, noise floor, AGC). Use the same radio model and settings on both, or swap the antennas between receivers for a while to measure the offset.
+- **SNR is not gain.** When outside noise sets the floor, a better antenna also hears more noise. The result is then closer to A's directivity against B than to its true gain, and local noise picked up by one antenna shifts every value.
+- **Polarisation.** Sky-wave signals arrive with changing polarisation, so the TOTAL gain is used. A pattern's vertical or horizontal part alone would mislead.
+- **Statistics.** `abs_lo_dbi`–`abs_hi_dbi` is a 95% interval for the median from fading scatter only. It doesn't cover model or angle error.
 
 ### 7.6 Summarize exchanges by grid pair (corridors)
 
@@ -1214,7 +1266,7 @@ Plus:
 | `calls_a`, `calls_b` | Callsigns at each end. |
 | `label` | `exchanges×  A→B/B→A`, shown when zoomed in. |
 
-**Antenna A/B** (all three outputs share these counts):
+**Antenna A/B** (direction, station and table outputs share these counts):
 
 | Field | Meaning |
 |---|---|
@@ -1224,6 +1276,15 @@ Plus:
 | `iqr_lo_db`, `iqr_hi_db` | Interquartile range (needs 4+ pairs). |
 | `decode_adv` | `(only_a − only_b) / all decodes`. Positive favours A. |
 
+With a reference pattern they also have:
+
+| Field | Meaning |
+|---|---|
+| `abs_n` | Pairs with an absolute value (the station has a grid and the pattern covers its angle and frequency). |
+| `abs_dbi` | Median estimated gain of the non-reference antenna, dBi. |
+| `abs_lo_dbi`, `abs_hi_dbi` | 95% interval of that median, from fading scatter only (needs 6+ pairs). |
+| `ref_dbi` | Median modelled gain of the reference antenna over the same pairs, dBi. |
+
 - By direction adds `sector` and `bearing_deg`.
 - By station adds:
   - `call`, `grid`, `distance_km`, `bearing_deg`;
@@ -1232,6 +1293,7 @@ Plus:
   - `angle_method` (`KC2G`, `model` or `geometric`);
   - `prop_mode` (`F2`, `above MUF` or `Es`).
 - The table adds `by` (`all`, `distance`, `takeoff`) and `bin`.
+- Matched decodes (one row per decode, no counts): `utc` (slot start), `call`, `mhz`, `snr_a`, `snr_b` (empty if that receiver missed it), `diff_db`, `distance_km`, `bearing_deg`, `takeoff_deg`, `prop_mode`; with a reference pattern also `ref_gain_dbi` (the reference's modelled gain at that bearing and takeoff angle) and `abs_gain_dbi` (the other antenna's estimated gain; empty for single decodes).
 
 **Skip distance by hour**: see [8.4](#84-skip-distance-by-hour).
 

@@ -11,7 +11,7 @@ about=For amateur (ham) radio operators.
     Ionosphere: check any paths against KC2G's current maps or the CCIR monthly-median model: path MUF, hops at the layer height, and which contacts F2 can't explain.
     Export research dataset: one CSV row per observed SNR from ALL.TXT (exchange reports and your decodes, with path, control points and day/night), optionally pseudonymised, for sharing with other operators and researchers.
     No extra Python packages needed.
-version=0.12.0
+version=0.13.0
 author=Cody Tews
 email=w7orb.radio@gmail.com
 homepage=https://github.com/w7orb/maidenhead-mapper
@@ -24,6 +24,10 @@ icon=icons/icon.svg
 experimental=True
 hasProcessingProvider=yes
 changelog=
+    0.13.0
+    - New: reference-antenna mode for Antenna A/B comparison. Give a modelled pattern for one antenna (CSV of azimuth_deg, elevation_deg, gain_dbi, or a 4nec2 / NEC-2 output file with its RADIATION PATTERNS tables) and its orientation; each pair gets ref_gain_dbi and the other antenna's abs_gain_dbi, and the bins add abs_dbi with a 95% interval, abs_n and ref_dbi
+    - New: optional matched-decodes table from Antenna A/B comparison
+    - Tests: pattern reader, interpolation, orientation and absolute-gain tests, and a QGIS smoke check
     0.12.0
     - New: Export research dataset (WSJT-X): one CSV row per observed SNR from ALL.TXT, with exchange_id linking both directions and your decodes, distance, bearing, fewest hops, control points, solar zenith and day/night there, censored flag, optional salted-hash pseudonyms and 4-character grids, and a .schema.json sidecar (schema 1.0, docs/research-export-schema.md)
     - Tests: research export unit tests and a QGIS smoke check

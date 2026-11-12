@@ -5,7 +5,8 @@
 or through pytest with MM_QGIS_PYTHON set to that launcher (tests/test_qgis_smoke.py).
 Checks that the plugin imports, every Processing algorithm builds, and the
 ALL.TXT tools, corridor summaries, station balance, Propagation over time
-(algorithm, temporal layers and panel) and the research export work on a
+(algorithm, temporal layers and panel), the research export and the antenna
+A/B comparison with a reference pattern work on a
 small synthetic ALL.TXT.
 Exits 0 and prints OK on success.
 """
@@ -184,6 +185,46 @@ def main():
             text = f.read()
         assert "K1ABC" not in text and "N0CALL" not in text and "FN31" in text
     check("research export", research_export)
+
+    def antenna_reference():
+        # B hears every Rx line 3 dB weaker and misses the last one; B is a flat 2 dBi (synthetic) reference
+        path_b = os.path.join(tmp, "ALL_B.TXT")
+        rx = [ln for ln in sample.lines() if " Rx " in ln]
+        with open(path_b, "w", encoding="utf-8", newline="\n") as f:
+            for ln in rx[:-1]:
+                head, snr, rest = ln[:31], int(ln[31:37]), ln[37:]
+                f.write(f"{head}{snr - 3:6d}{rest}\n")
+        pat = os.path.join(tmp, "reference.csv")
+        with open(pat, "w", encoding="utf-8") as f:
+            f.write("azimuth_deg,elevation_deg,gain_dbi\n")
+            f.write("".join(f"{a},{e},2.0\n" for a in range(0, 360, 10) for e in (0, 30, 60, 90)))
+        params = {"FILES_A": [path], "FILES_B": [path_b], "MYGRID": "DN06", "SOURCE": 2,
+                  "REFERENCE_PATTERN": pat, "REFERENCE_SIDE": 1, "ORIENTATION_DEG": 0,
+                  "SECTORS": "memory:", "STATIONS": "memory:", "TABLE": "memory:", "DECODES": "memory:"}
+        r = processing.run("maidenhead:antenna_compare", params, context=ctx)
+        table = {(f["by"], f["bin"]): f for f in layer(r["TABLE"]).getFeatures()}
+        row = table[("all", "all")]
+        assert (row["n_both"], row["only_a"], row["only_b"]) == (11, 1, 0), (row["n_both"], row["only_a"])
+        assert row["abs_dbi"] == 5.0 and row["ref_dbi"] == 2.0 and row["abs_n"] == 11, row.attributes()
+        dec = list(layer(r["DECODES"]).getFeatures())
+        pairs = [f for f in dec if f["diff_db"] == 3]
+        assert len(pairs) == 11 and len(dec) == 12 and all(f["abs_gain_dbi"] == 5.0 for f in pairs)
+        assert "abs_dbi" in layer(r["SECTORS"]).fields().names()
+        # without a pattern the outputs keep their old fields
+        params.update({"REFERENCE_PATTERN": None, "DECODES": None})
+        r = processing.run("maidenhead:antenna_compare", params, context=ctx)
+        assert "abs_dbi" not in layer(r["TABLE"]).fields().names()
+        # a bad pattern file gives a clear error
+        with open(pat, "w", encoding="utf-8") as f:
+            f.write("azimuth_deg,gain_dbi\n0,1\n")
+        params["REFERENCE_PATTERN"] = pat
+        try:
+            processing.run("maidenhead:antenna_compare", params, context=ctx)
+        except Exception as exc:          # QgsProcessingException
+            assert "elevation_deg" in str(exc), exc
+        else:
+            raise AssertionError("bad pattern accepted")
+    check("antenna A/B with a reference pattern", antenna_reference)
 
 
 try:
