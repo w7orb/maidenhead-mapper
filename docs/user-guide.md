@@ -95,7 +95,9 @@ Every tool is also in the **Processing Toolbox** (*Processing → Toolbox*) unde
 | **Frame** | One step of an animation: an hour, 3 hours or a day. A time-enabled layer shows only the features of the current frame. |
 | **Temporal Controller** | QGIS's built-in time slider (*View → Panels → Temporal Controller*). It plays time-enabled layers frame by frame. |
 | **Research export** | A table with one row per observed SNR (who transmitted, who received, when, on which band, and the path), for merging with other operators' data and for propagation research. See [7.8](#78-export-research-dataset). |
-| **Censored** | A value known only to be at or below a limit. FT8 reports stop near −24 dB, so a report there may stand for a weaker signal. |
+| **Censored** | A value known only to be at or below a limit. FT8 reports stop near −24 dB, so a report there may stand for a weaker signal. A `not_decoded` row is censored with no value at all. |
+| **Basic vs operational MUF** | The basic MUF is what the ionosphere model gives (ITU-R P.1239 / CCIR, by P.533's rules); it is what *Check paths* and the research export use. P.533's operational MUF adds an allowance that makes it a bit higher, so a path a little above the basic MUF can still be F2. |
+| **f/MUF** | The frequency divided by the path's MUF. Up to 1: F2 can carry it; over 1: something else is needed (sporadic-E, scatter) or the ionosphere was better than the model. |
 | **Sunspot number (R12)** | The 12-month smoothed sunspot number. The CCIR model uses it to scale the ionosphere to the solar cycle. |
 
 ## 5. Grid: Create Maidenhead grid
@@ -722,26 +724,48 @@ Most of these decodes were on 15m. The pattern fits the day–night line moving 
 | Grid precision at most | 6 characters | Or 4, to share less about where you are. |
 | Pseudonymise callsigns | off | Replaces every callsign with a code; grids are kept. |
 | Salt for pseudonyms | empty | A secret word mixed into the codes. Use the same salt every time so codes match across exports. Never publish it. |
+| Add the basic MUF, f/MUF and sporadic-E flag (CCIR model) | on | Fills `muf_basic_mhz`, `f_over_muf` and `es_candidate` for 12m/10m. Needs the CCIR coefficients (downloaded once) and a sunspot number. Untick to leave them empty. |
+| Sunspot number R12 for the model | 0 (look it up) | As in *Check paths*: SILSO, or KC2G's effective sunspot number for the last few days. Enter one for dates neither covers (the last month or so before SILSO publishes it). |
 | Research dataset (CSV) | temporary file | Choose a file name to keep it. The `.schema.json` is written next to it. |
 
 #### What a row is
 
-Two kinds of row (`report_kind`):
+Three kinds of row (`report_kind`):
 
 - **exchange_report**: the report one station sent another. `W4XYZ K1ABC -05` means K1ABC hears W4XYZ at −5 dB, so `tx_call` = W4XYZ and `rx_call` = K1ABC. A report repeated in the same exchange is one row; `n_decoded` counts the repeats.
 - **my_decode**: your receiver decoded a message. `tx_call` = the sender, `rx_call` = you. Every decode is a row, CQs included.
+- **not_decoded** (since 0.15.0): a transmission that the receiving station evidently didn't decode. No SNR (`snr_db` empty), `censored` = 1, `n_decoded` = 0. See below.
 
 `exchange_id` links both directions of an exchange and your decodes of each side. One overheard exchange can give four SNRs: A→B, B→A, A→you and B→you. That is what lets a model separate station effects from path effects (TODO item 13).
 
 Each row with both grids also gets the path: distance, bearing, the fewest F2 hops (300 km layer), control points (the midpoint up to 2000 km, else 1000 km from each end), the solar zenith angle there and `day_night`. The fields are listed in [10.6](#106-research-dataset).
 
+#### MUF and sporadic-E per row (schema 1.1)
+
+- `muf_basic_mhz`: the path's **basic MUF** at the row's time from the **CCIR monthly-median model**, worked out exactly as *Check paths* does with *CCIR model only* (P.533 control points, fewest hops; the time rounded down to 15 minutes). KC2G isn't used: it only has the present, and exports are of the past.
+- `f_over_muf`: `freq_mhz / muf_basic_mhz`. Over 1 means above the basic MUF. Like "above basic MUF" in *Check paths*, that is worth a look, not proof of anything: the operational MUF is a bit higher, and on any one day the ionosphere can be ~20% off the monthly median.
+- `es_candidate`: 1 where *Find sporadic-E paths* would say **high** confidence: 12m to 2m at single-Es-hop distance (500 to ~2,300 km), and on 12m and 10m only when the frequency is above the basic MUF. 0 where the rule says no. Empty when it can't be told: no grids, or 12m/10m in range without a MUF.
+- `foes_min_mhz` (with `es_candidate` = 1): the lowest Es critical frequency that returns that frequency at that distance.
+
+#### Rows for transmissions that weren't decoded
+
+WSJT-X sends the same message again until it decodes the answer. So when, in an exchange,
+
+1. station S sends T a message (a call or grid, a report, or a roger report),
+2. in the next slot T sends S the answer to it (a report, a roger report, or RR73/RRR), and
+3. in the slot after that S sends **exactly the same message** again,
+
+S did not decode T's answer. That answer becomes a `not_decoded` row: `tx_call` = T, `rx_call` = S, the time and frequency of T's message. You must have decoded all three messages (or sent T's message yourself: then the row says S missed you). FT8 and FT4 only, with the messages one slot apart.
+
+What it is **not**: proof the path was closed. S may have missed T because of QRM, because S's operator held the message, or because S decoded it too late to change the next transmission. Your own repeats never count: you may have decoded the answer and sent the message again anyway. Exchanges that just stop are not counted either: the other station may simply have stopped, or gone to someone else.
+
 #### Example
 
-The author's ALL.TXT, 11 November 2026 18:00 UTC to 12 November 06:00 UTC: 45,479 rows (6,886 exchange reports and 38,593 of the author's decodes) from 8,578 exchanges and 2,657 stations. 40,935 rows have both grids; 263 are censored at −24 dB. Most are on 15m and 20m.
+The author's ALL.TXT, 11 November 2026 18:00 UTC to 12 November 06:00 UTC: 45,913 rows (6,886 exchange reports, 38,593 of the author's decodes and 434 not_decoded) from 8,578 exchanges and 2,657 stations. 41,314 rows have both grids, and 41,297 of them a basic MUF (R12 60–61, KC2G's effective sunspot number); 263 decodes are censored at −24 dB. Most are on 15m and 20m. About 19% of the 20m rows and 16% of the 15m rows are above the basic MUF; no row is a sporadic-E candidate (November, and almost nothing on 10m). Building the rows took about 12 seconds, 9 of them for the MUF.
 
 #### Limits
 
-- **Only what you decoded.** A signal you didn't decode is not a row. Repeated reports (`n_decoded` over 1) hint that the reply wasn't heard.
+- **Only what you decoded.** A signal you didn't decode is not a row. `not_decoded` rows cover only the clear case above: a missed answer between two identical messages.
 - **Censoring.** Below about −24 dB FT8 doesn't decode, so weak signals are missing rather than low. Treat `censored` rows as "this or lower".
 - **Grids.** FT8 sends 4-character grids, so a station can be up to ~100 km from its grid's centre. Rows without both grids have empty path fields.
 - **Callsigns are kept by default.** Callsigns and grids are sent openly on the air and published by PSK Reporter, so the export keeps them. *Pseudonymise callsigns* is there if a project asks for codes instead; note that grids, times and frequencies can still point to a station.
@@ -1303,23 +1327,27 @@ From *Export research dataset* (a CSV file, not a layer). Path fields are empty 
 
 | Field | Meaning |
 |---|---|
-| `schema_version`, `source` | `1.0`; `alltxt`. |
+| `schema_version`, `source` | `1.1` (`1.0` before 0.15.0); `alltxt`. |
 | `observer` | Your callsign: whose log the row came from. |
 | `time_utc` | When the message was sent, e.g. `2026-11-11T21:00:30Z`. |
 | `band`, `freq_mhz`, `mode` | `freq_mhz` is the dial frequency plus the audio offset. |
-| `report_kind` | `exchange_report` or `my_decode` (see [7.8](#78-export-research-dataset)). |
+| `report_kind` | `exchange_report`, `my_decode` or `not_decoded` (see [7.8](#78-export-research-dataset)). |
 | `exchange_id` | Links rows of one exchange. Empty for CQs. |
 | `tx_call`, `tx_grid` | The station transmitting. |
 | `rx_call`, `rx_grid` | The station receiving: the one that measured the SNR. |
-| `snr_db` | SNR in dB. |
-| `censored` | 1 if `snr_db` is at or below the decode floor. |
-| `n_decoded` | Times this report was decoded in the exchange (1 for your decodes). |
+| `snr_db` | SNR in dB. Empty for `not_decoded`. |
+| `censored` | 1 if `snr_db` is at or below the decode floor; always 1 for `not_decoded`. |
+| `n_decoded` | Times this report was decoded in the exchange (1 for your decodes, 0 for `not_decoded`). |
 | `grid_precision` | Characters in the coarser grid (4 or 6). |
 | `distance_km`, `bearing_deg` | From tx to rx. |
 | `n_min_hops` | Fewest F2 hops (layer at 300 km). |
 | `cp1_lat`, `cp1_lon`, `cp2_lat`, `cp2_lon` | Control points: the midpoint up to 2000 km; else 1000 km from tx (cp1) and from rx (cp2). |
 | `cp1_sza_deg`, `cp2_sza_deg` | Solar zenith angle at each control point. |
 | `day_night` | `day` (zenith below 90°), `twilight` (90–108°), `night` (108° or more), or `mixed` (the two control points differ). |
+| `muf_basic_mhz` | Basic MUF of the path at that time from the CCIR monthly-median model, as *Check paths* computes it. Added in 1.1, like the three below; they come after all the 1.0 fields. |
+| `f_over_muf` | `freq_mhz` / `muf_basic_mhz`. Over 1: above the basic MUF. |
+| `es_candidate` | 1 if *Find sporadic-E paths* would call it high confidence (12m–2m at 500–2,300 km; on 12m/10m above the basic MUF), 0 if not, empty if it can't be told. |
+| `foes_min_mhz` | For Es candidates: the lowest Es critical frequency that returns `freq_mhz` at that distance. |
 
 ## 11. Data files, caches and settings
 
@@ -1395,6 +1423,9 @@ PSK Reporter allows one query per 5 minutes. Wait, or map what you already have 
 
 **Export research dataset: "Enter My callsign"**
 Your decodes are rows received at your station, so the tool needs your callsign. Enter it, or set it once in another tool (e.g. *Import PSK Reporter reports*), which stores it.
+
+**Export research dataset: muf_basic_mhz is empty**
+The log says why (*No MUF for N row(s): …*). Usually there is no sunspot number for that month yet: enter one under *Sunspot number R12*. The first run also needs internet for the CCIR coefficients.
 
 **Export research dataset: many rows have empty distance and day_night**
 Those stations never sent a grid in the read period, or *My grid* is empty (your decodes then have no path). Set *My grid*, or start *From* a little earlier.

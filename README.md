@@ -166,7 +166,7 @@ Below the decode floor the weaker antenna reports nothing rather than a low SNR,
 
 ### Export research dataset (WSJT-X)
 
-Writes ALL.TXT decodes as a CSV with one row per observed SNR, for merging with other operators' data and sharing (e.g. HamSCI, Zenodo): the reports stations sent each other in exchanges and your own decodes, linked by `exchange_id`, with distance, bearing, fewest hops, control points, day/night there and a censored flag. Callsigns are kept as sent on the air; pseudonymising them (salted SHA-256) is an option, off by default. A `.schema.json` next to the CSV describes every field; see [docs/research-export-schema.md](docs/research-export-schema.md).
+Writes ALL.TXT decodes as a CSV with one row per observed SNR, for merging with other operators' data and sharing (e.g. HamSCI, Zenodo): the reports stations sent each other in exchanges and your own decodes, linked by `exchange_id`, with distance, bearing, fewest hops, control points, day/night there and a censored flag. Schema 1.1 (v0.15.0) adds the path's basic MUF at that time from the CCIR monthly-median model (as *Check paths* computes it), f/MUF, the sporadic-E detector's flag, and `not_decoded` rows for answers a station evidently missed (it sent the same message again right after them). Callsigns are kept as sent on the air; pseudonymising them (salted SHA-256) is an option, off by default. A `.schema.json` next to the CSV describes every field; see [docs/research-export-schema.md](docs/research-export-schema.md).
 
 ### Activity timeline
 
@@ -252,7 +252,7 @@ python -m pytest
 
 Runs with any Python 3.8+ that has pytest installed; QGIS is not needed. The plugin itself uses only the Python standard library and QGIS.
 
-A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance, Propagation over time (including the time-enabled layers and the panel) and research export tools work on a small synthetic `ALL.TXT`. It runs in QGIS's own Python, so nothing is installed there:
+A QGIS smoke test (`tests/qgis_smoke.py`) checks that the plugin loads, every Processing algorithm builds, and the ALL.TXT, corridor, station balance, Check paths (CCIR model), Propagation over time (including the time-enabled layers and the panel) and research export tools work on a small synthetic `ALL.TXT`. It runs in QGIS's own Python, so nothing is installed there:
 
 ```
 "C:\Program Files\QGIS 3.44.2\bin\python-qgis.bat" tests\qgis_smoke.py

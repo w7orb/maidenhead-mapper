@@ -41,6 +41,8 @@ class ResearchExportAlgorithm(QgsProcessingAlgorithm):
     GRID = "GRID"
     PSEUDONYMISE = "PSEUDONYMISE"
     SALT = "SALT"
+    MUF = "MUF"
+    R12 = "R12"
     OUTPUT = "OUTPUT"
     SCHEMA = "SCHEMA"
     ROWS = "ROWS"
@@ -75,6 +77,15 @@ class ResearchExportAlgorithm(QgsProcessingAlgorithm):
             "has distance, bearing, fewest hops (300 km layer), control points (midpoint up to 2000 km, "
             "else 1000 km from each end), day or night there, and a censored flag (SNR at or below the "
             "decode floor).\n\n"
+            "Schema 1.1 adds, per row: muf_basic_mhz, the path's basic MUF at its time from the CCIR "
+            "monthly-median model (the same method as Check paths' CCIR option; KC2G only has the present), "
+            "f_over_muf, es_candidate (the sporadic-E detector's high-confidence rule: 12m-2m at single-Es-hop "
+            "range, on 12m/10m above the basic MUF) and foes_min_mhz. not_decoded rows record a transmission "
+            "that rx evidently didn't decode: tx answered rx's message and rx sent the same message again in "
+            "its next slot. They have no SNR and censored = 1; they don't prove the path was closed (QRM, "
+            "or rx's operator, can do the same).\n\n"
+            "The MUF needs the CCIR coefficients (downloaded once) and a sunspot number: looked up as in "
+            "Check paths, or the one you enter. Untick the MUF option to leave those columns empty.\n\n"
             "Pseudonymise replaces every callsign with a salted SHA-256 code; grids are kept. Use the same "
             "secret salt for all your exports so codes match; never publish the salt.\n\n"
             "A <name>.schema.json file next to the CSV describes every field, the time span, the row counts "
@@ -103,6 +114,11 @@ class ResearchExportAlgorithm(QgsProcessingAlgorithm):
             self.PSEUDONYMISE, self.tr("Pseudonymise callsigns"), defaultValue=False))
         self.addParameter(QgsProcessingParameterString(
             self.SALT, self.tr("Salt for pseudonyms (keep it secret)"), optional=True, defaultValue=""))
+        self.addParameter(QgsProcessingParameterBoolean(
+            self.MUF, self.tr("Add the basic MUF, f/MUF and sporadic-E flag (CCIR model)"), defaultValue=True))
+        self.addParameter(QgsProcessingParameterNumber(
+            self.R12, self.tr("Sunspot number R12 for the model (0 = look it up)"), QgsProcessingParameterNumber.Double,
+            defaultValue=0.0, minValue=0.0, maxValue=400.0))
         self.addParameter(QgsProcessingParameterFileDestination(
             self.OUTPUT, self.tr("Research dataset (CSV)"), self.tr("CSV files (*.csv)")))
         self.addOutput(QgsProcessingOutputFile(self.SCHEMA, self.tr("Schema (JSON)")))
@@ -136,6 +152,14 @@ class ResearchExportAlgorithm(QgsProcessingAlgorithm):
         opts = rx.Options(my_call=mycall, my_grid=mygrid, start=start, end=end, band=band,
                           floor_db=self.parameterAsInt(parameters, self.FLOOR, context), pseudonymise=pseudo,
                           salt=salt, grid_chars=GRID_CHARS[self.parameterAsEnum(parameters, self.GRID, context)])
+
+        if self.parameterAsBool(parameters, self.MUF, context):
+            from .ionosphere import MODE_MODEL, IonoSource
+            try:
+                opts.muf_source = IonoSource(feedback, MODE_MODEL,
+                                             r12=self.parameterAsDouble(parameters, self.R12, context) or None)
+            except (QgsProcessingException, OSError, ValueError) as exc:
+                feedback.reportError(self.tr("No CCIR model ({}); the MUF columns stay empty.").format(exc), False)
 
         feedback.setProgressText(self.tr("Indexing…"))
         ix = alltxt_index.index(files, cta.index_cache_dir(), lambda p: feedback.setProgress(p * 0.3),
@@ -171,6 +195,14 @@ class ResearchExportAlgorithm(QgsProcessingAlgorithm):
             stats.rows, stats.by_kind.get(rx.EXCHANGE_REPORT, 0), stats.by_kind.get(rx.MY_DECODE, 0),
             stats.censored, stats.with_both_grids, stats.exchanges, stats.stations,
             f"{stats.first_utc:%Y-%m-%d %H:%M}", f"{stats.last_utc:%Y-%m-%d %H:%M}"))
+        if stats.by_kind.get(rx.NOT_DECODED):
+            feedback.pushInfo(self.tr("{} not_decoded row(s)").format(stats.by_kind[rx.NOT_DECODED]))
+        if opts.muf_source is not None:
+            feedback.pushInfo(self.tr("Basic MUF on {} of {} row(s) with both grids; {} sporadic-E candidate(s). "
+                                      "Model: {}").format(stats.with_muf, stats.with_both_grids, stats.es_candidates,
+                                                          "; ".join(stats.muf_labels) or "-"))
+            for why, n in stats.muf_missing.items():
+                feedback.pushWarning(self.tr("No MUF for {} row(s): {}").format(n, why))
         feedback.pushInfo(self.tr("Wrote {} and {}").format(out_path, schema))
         feedback.setProgress(100)
         return {self.OUTPUT: out_path, self.SCHEMA: schema, self.ROWS: stats.rows}

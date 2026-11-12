@@ -151,16 +151,13 @@ def ccir_dir():
 def load_ccir_model(feedback):
     """The CCIR model; downloads the 12 coefficient files (~0.5 MB) once."""
     from ..core import ccir
-    months = {}
     for m in range(1, 13):
-        path = os.path.join(ccir_dir(), f"ccir{m + 10}.asc")
+        path = os.path.join(ccir_dir(), ccir.file_name(m))
         if not os.path.isfile(path):
             if m == 1:
                 feedback.pushInfo(QCoreApplication.translate("ionosphere", "Downloading CCIR coefficients (once)"))
             _download(CCIR_URL.format(m + 10), path, feedback)
-        with open(path, encoding="ascii", errors="replace") as f:
-            months[m] = ccir.parse(f.read())
-    return ccir.Model(months)
+    return ccir.load_dir(ccir_dir())
 
 
 def load_sunspots(feedback):
@@ -189,7 +186,7 @@ class IonoSource:
         self.mode, self.max_age, self.r12_manual = mode, max_age_h * 3600, r12
         self.kc2g = self.model = None
         self.smoothed = self.monthly = self.essn = None
-        self._model_cache = {}
+        self.ccir = None             # ccir.ModelSource: the CCIR branch
         self.used = {}
         if mode in (MODE_AUTO, MODE_KC2G):
             try:
@@ -211,12 +208,11 @@ class IonoSource:
                     self.essn = _load("essn.json")
                 except (OSError, ValueError):
                     self.essn = None
+            from ..core import ccir
+            self.ccir = ccir.ModelSource(self.model, r12, self.smoothed, self.monthly, self.essn)
 
     def r12(self, when):
-        from ..core import ccir
-        if self.r12_manual:
-            return self.r12_manual, "given"
-        return ccir.r12_for(when, self.smoothed, self.monthly, self.essn)
+        return self.ccir.r12(when) if self.ccir else (self.r12_manual, "given")
 
     def conditions(self, when):
         """(conditions or None, label, note) for a path at `when` (None = now)."""
@@ -226,16 +222,7 @@ class IonoSource:
         if self.model is None:
             gap = abs((when - k.time).total_seconds()) / 3600 if (k and when) else None
             return None, "", (f"path {gap:,.1f} h from the KC2G data" if gap else "no ionosphere data")
-        t = when or _dt.datetime.now(_dt.timezone.utc)
-        t = t.replace(minute=t.minute - t.minute % 15, second=0, microsecond=0)
-        r, src = self.r12(t)
-        if r is None:
-            return None, "", f"no sunspot number for {t:%Y-%m}; enter one"
-        key = (t, round(r))
-        if key not in self._model_cache:
-            self._model_cache[key] = self.model.conditions(t, r)
-        label = f"CCIR median, R12 {r:.0f} ({src})"
-        return self._model_cache[key], label, ""
+        return self.ccir.conditions(when)
 
 
 def _categorized(attr, geometry):

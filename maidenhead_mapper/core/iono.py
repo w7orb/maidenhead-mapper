@@ -81,6 +81,11 @@ def normalize_status(status):
     return STATUS_ABOVE if status in LEGACY_ABOVE else status
 
 
+def status_for(freq_mhz, muf_mhz):
+    """F2 if the frequency is at or below the path's basic MUF, else above it."""
+    return STATUS_F2 if freq_mhz <= muf_mhz else STATUS_ABOVE
+
+
 # ------------------------------------------------------------------ ionosondes
 @dataclass
 class Ionosonde:
@@ -402,7 +407,7 @@ def analyse_path(lon1, lat1, lon2, lat2, freq_mhz, cond: Conditions,
         return PathIono(STATUS_NO_DATA, n, takeoff)
     rows, n_muf = cp
     muf = min(r[5] for r in rows)
-    return PathIono(STATUS_F2 if freq_mhz <= muf else STATUS_ABOVE, n, takeoff,
+    return PathIono(status_for(freq_mhz, muf), n, takeoff,
                     round(sum(r[3] for r in rows) / len(rows), 1), round(min(r[2] for r in rows), 2),
                     round(muf, 2), rows, n_muf)
 

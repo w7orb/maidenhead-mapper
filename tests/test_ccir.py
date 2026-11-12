@@ -94,3 +94,30 @@ def test_matches_pyiri_reference_values():
         for k, r12 in enumerate((0, 100)):
             f, m, _ = model.values(lon, lat, when, r12)
             assert f == pytest.approx(fo[k], rel=0.03) and m == pytest.approx(m3[k], rel=0.03)
+
+
+def test_model_source_rounds_time_and_caches():
+    model = ccir.Model({m: constant_month(5.0, 10.0, 3.5, 3.0) for m in range(1, 13)})
+    src = ccir.ModelSource(model, 50)
+    a, label, note = src.conditions(dt.datetime(2026, 11, 11, 21, 7, 30, tzinfo=dt.timezone.utc))
+    assert a.time == dt.datetime(2026, 11, 11, 21, 0, tzinfo=dt.timezone.utc) and a.r12 == 50
+    assert label == "CCIR median, R12 50 (given)" and note == ""
+    b, _, _ = src.conditions(dt.datetime(2026, 11, 11, 21, 14, 59, tzinfo=dt.timezone.utc))
+    assert b is a
+    looked_up = ccir.ModelSource(model, smoothed={(2026, 11): 80.0})
+    c, label, _ = looked_up.conditions(dt.datetime(2026, 11, 11, 21, 7, tzinfo=dt.timezone.utc))
+    assert c.r12 == 80.0 and label == "CCIR median, R12 80 (SILSO smoothed)"
+    none, label, note = ccir.ModelSource(model).conditions(dt.datetime(2026, 11, 11, tzinfo=dt.timezone.utc))
+    assert none is None and label == "" and "2026-11" in note
+
+
+def test_model_source_from_dir(tmp_path):
+    for m in range(1, 13):
+        (tmp_path / ccir.file_name(m)).write_text("1.0 2.0")      # too short: parse() refuses
+    with pytest.raises(ValueError):
+        ccir.ModelSource.from_dir(str(tmp_path))
+    if os.path.isfile(os.path.join(CACHE, "ccir11.asc")):
+        src = ccir.ModelSource.from_dir(CACHE, r12=60)
+        cond, label, _ = src.conditions(dt.datetime(2026, 11, 11, 21, tzinfo=dt.timezone.utc))
+        f2, h, mufd = cond.at(-100, 40)
+        assert 1 < f2 < 20 and 150 < h < 500 and mufd > f2

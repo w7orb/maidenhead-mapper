@@ -9,7 +9,7 @@ about=For amateur (ham) radio operators.
     Activity timeline: a reports-per-hour chart for any of these; drag across it to map only those hours.
     WSJT-X live map: listens to WSJT-X's UDP feed (unicast, or multicast alongside JTAlert/GridTracker) and plots decoded stations as they are heard, fading with age. Logged QSOs show as stars.
     Ionosphere: check any paths against KC2G's current maps or the CCIR monthly-median model: path MUF, hops at the layer height, and which contacts F2 can't explain.
-    Export research dataset: one CSV row per observed SNR from ALL.TXT (exchange reports and your decodes, with path, control points and day/night), optionally pseudonymised, for sharing with other operators and researchers.
+    Export research dataset: one CSV row per observed SNR from ALL.TXT (exchange reports and your decodes, with path, control points, day/night, basic MUF and a sporadic-E flag, plus rows for answers that weren't decoded), optionally pseudonymised, for sharing with other operators and researchers.
     No extra Python packages needed.
 version=0.15.0
 author=Cody Tews
@@ -25,6 +25,8 @@ experimental=True
 hasProcessingProvider=yes
 changelog=
     0.15.0
+    - Export research dataset: schema 1.1. New columns at the end: muf_basic_mhz (the path's basic MUF at the row's time from the CCIR monthly-median model, as Check paths computes it), f_over_muf, es_candidate (the sporadic-E detector's high-confidence rule) and foes_min_mhz; new not_decoded rows for an answer a station evidently missed (it sent the same message again in its next slot), with no SNR and censored = 1. Options to skip the MUF and to give R12. 1.0 columns and rows are unchanged
+    - Tests: MUF against the CCIR model, Es flag, not_decoded rules, column order; QGIS smoke checks for Check paths and the new columns
     - Check paths: the status for paths above the MUF is now 'above basic MUF' (f2_status and mode_guess; was 'above F2 MUF' / 'above MUF'), to make clear it is P.1239 / CCIR's basic MUF, without P.533's operational adjustment. Layers with the old values are still read by Summarize exchanges and Find sporadic-E paths
     0.13.0
     - New: reference-antenna mode for Antenna A/B comparison. Give a modelled pattern for one antenna (CSV of azimuth_deg, elevation_deg, gain_dbi, or a 4nec2 / NEC-2 output file with its RADIATION PATTERNS tables) and its orientation; each pair gets ref_gain_dbi and the other antenna's abs_gain_dbi, and the bins add abs_dbi with a 95% interval, abs_n and ref_dbi
