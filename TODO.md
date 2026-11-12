@@ -38,7 +38,7 @@
 
 1. **Check the research export** on an evening with your own QSOs (reports you sent should appear as `exchange_report` rows with rx = you).
 2. **26 follow-up**: run *Predict paths with VOACAP* on several weeks of corridors over time (one band at a time) and look at the gap by distance, hour and direction; compare VOACAP's operational MUF with Check paths' basic MUF (follow-up to 18).
-3. **prop-archive**: update to research export schema 1.1 (re-copy research_export, ccir, iono and es from the plugin).
+3. ~~**prop-archive**: update to research export schema 1.1~~ **done** (prop-archive 0746dd7; exports match the plugin cell for cell).
 4. **Propagation over time** from saved live sessions and PSK Reporter pulls (follow-up to 25).
 5. **19**: live hop estimates.
 6. **Corridors in the Activity timeline** (follow-up to 24).
