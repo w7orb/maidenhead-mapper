@@ -22,7 +22,7 @@
 | 15 | Elevation pattern from A/B data: mixture fit over hop counts | M–L (research-grade) | **High** (research value) | 5, 6; days of two-receiver data across day and night | Layer height swings day/night, so one distance is heard at several angles; a fit that treats each decode as a mix of hop counts can separate gain vs elevation from distance. |
 | 16 | ~~Reference-antenna mode for A/B~~ **done** | S–M | Medium–High | 6 | Load a NEC-modelled pattern (CSV of gain vs azimuth/elevation) for antenna B; A's results then come out as an absolute pattern in dBi. |
 | 17 | ~~Import ADIF logs~~ **done** | S | Medium–High | — | Maps your whole logging history (WSJT-X, LoTW, any logger), merges confirmations, and feeds Check paths / Station balance. |
-| 18 | Basic vs operational MUF in Check paths | S | Medium | 5, 8 | Decision pending. P.533's operational MUF is a bit higher than the basic MUF Check paths uses, so fewer long 10m paths would show as "above". Option: add the operational factors, or rename the status "above basic MUF". |
+| 18 | ~~Basic vs operational MUF in Check paths~~ **done** | S | Medium | 5, 8 | Renamed; compare with VOACAP's operational MUF under 26. The status is now "above basic MUF" (`f2_status` and `mode_guess`, v0.15.0); layers with the old "above F2 MUF" / "above MUF" are still read. |
 | 19 | Live hop estimates from the ionosphere | M | Medium | 5 | The live map fills `hops_iono`/`takeoff_iono` as each exchange arrives, from the cached KC2G data (refreshed every 15 min), instead of only the fixed-300 km estimate. |
 | 20 | ~~Fix: Station balance help text cut off~~ **done** | S | Low | — | The "<" in "< −3 dB" is read as formatting by QGIS, which hides the rest of the line after "good ears (". |
 | 21 | ~~Fix: Skip distance distances unrounded~~ **done** | S | Low | — | `median_km`/`p90_km` show many decimals in hours with too few contacts for a skip edge. |
@@ -32,19 +32,18 @@
 | 25 | ~~Propagation over time with the time slider~~ **done** | M | High | — | Index ALL.TXT, pick dates, group by hour/day, time-enabled corridor and cell layers for the Temporal Controller. Possible next: the same from saved live sessions and PSK Reporter pulls; include my own decodes (their area → mine). |
 | 26 | Predicted vs observed (VOACAP) | M (paths) + M (coverage maps) | **High** (community value) | 18 helps; VOACAP installed by the user | Add VOACAP's monthly-median REL, SNR, MUF and mode to observed corridors and exchanges, and report the gap from what was heard. Few such comparisons exist (3Y0K: VOACAP −11.3 dB bias vs RBN). Later: coverage maps from my station under observed spots. |
 
-**Done**: 1–10, 12, 16, 17, 20–25, and step 1 of 13 (research export). **Open**: 11 (needs weeks of data), 13 steps 2–3 (propagation model), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 18 (decision pending: basic vs operational MUF), 19 (live hop estimates), 26 (predicted vs observed, VOACAP).
+**Done**: 1–10, 12, 16–18, 20–25, and step 1 of 13 (research export). **Open**: 11 (needs weeks of data), 13 steps 2–3 (propagation model), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 19 (live hop estimates), 26 (predicted vs observed, VOACAP).
 
 ## Next up (suggested order)
 
-1. **18**: decide basic vs operational MUF (suggestion: rename the status "above basic MUF" now; revisit with 26).
-2. **GitHub**: private vulnerability reporting, secret scanning, CodeQL; a tests workflow; a v0.12.0 release.
-3. **Check the research export** on an evening with your own QSOs (reports you sent should appear as `exchange_report` rows with rx = you).
-4. **26 step 1**: VOACAP predicted vs observed for corridors and exchanges.
-5. **13 remainder for the export**: f/MUF per row, an Es flag, rows for missed decodes.
-6. **Propagation over time** from saved live sessions and PSK Reporter pulls (follow-up to 25).
-7. **19**: live hop estimates.
-8. **Corridors in the Activity timeline** (follow-up to 24).
-9. Later / research: distance-vs-time charts with flare overlay and LSTID detection (may fit prop-archive better), 26 step 2 (coverage maps), 13 steps 2–3, 14, 15, 11, campaign mode for the 2 August 2027 eclipse.
+1. **GitHub**: private vulnerability reporting, secret scanning, CodeQL; a tests workflow; a v0.12.0 release.
+2. **Check the research export** on an evening with your own QSOs (reports you sent should appear as `exchange_report` rows with rx = you).
+3. **26 step 1**: VOACAP predicted vs observed for corridors and exchanges; compare its operational MUF with Check paths' basic MUF (follow-up to 18).
+4. **13 remainder for the export**: f/MUF per row, an Es flag, rows for missed decodes.
+5. **Propagation over time** from saved live sessions and PSK Reporter pulls (follow-up to 25).
+6. **19**: live hop estimates.
+7. **Corridors in the Activity timeline** (follow-up to 24).
+8. Later / research: distance-vs-time charts with flare overlay and LSTID detection (may fit prop-archive better), 26 step 2 (coverage maps), 13 steps 2–3, 14, 15, 11, campaign mode for the 2 August 2027 eclipse.
 
 Long-term capture and analysis outside QGIS lives in the separate prop-archive project (`d:\projects\gis\prop-archive`), which uses the same research export schema.
 

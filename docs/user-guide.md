@@ -793,12 +793,12 @@ For each path in a station or exchange layer, works out whether the F2 layer cou
 
 | Field | Meaning |
 |---|---|
-| `f2_status` | **F2**: the band is at or below the path's MUF. **above F2 MUF**: simple F2 hops don't explain it (sporadic-E, scatter, an unusual path, or the map is off). **no data**: no ionosphere for that time, or no grid or band. |
+| `f2_status` | **F2**: the band is at or below the path's MUF. **above basic MUF**: simple F2 hops don't explain it (sporadic-E, scatter, an unusual path, or the map is off). Layers made before 0.15 say *above F2 MUF*; the plugin's tools read both. **no data**: no ionosphere for that time, or no grid or band. |
 | `muf_mhz` | The path's F2 **basic MUF** by ITU-R P.533-14. |
 | `fof2_mhz`, `hmf2_km` | foF2 and layer height where the MUF was judged. |
 | `hops_iono`, `takeoff_iono` | Likely hop count and takeoff angle at the measured layer height. |
 | `hops_muf` | The hop count the MUF was worked out with (P.533's rules). Usually the same as `hops_iono`; sometimes one more. |
-| `mode_guess` | The most likely way the signal travelled: **F2**, **Es** (sporadic-E), **above MUF** or **no data**. |
+| `mode_guess` | The most likely way the signal travelled: **F2**, **Es** (sporadic-E), **above basic MUF** or **no data** (*above MUF* in layers made before 0.15). |
 | `bands_f2` | Which of the path's bands F2 supports. |
 | `freq_mhz` | The frequency judged: the band's FT8 frequency; a station on several bands is judged on its highest. |
 | `iono_source`, `iono_utc`, `iono_note` | Which data was used, its time, and why there was none. |
@@ -829,7 +829,7 @@ A band **fits** a path when its frequency is at or below the path's MUF.
 - Longer paths: the lower of the values at two *control points*, half a hop in from each end. A long path is only as good as its weakest end.
 - Paths over 9,000 km: P.533's long-path method.
 
-This is the **basic** MUF. P.533's *operational* MUF is typically 10–20% higher, so contacts slightly "above F2 MUF" are common, especially on long paths. Treat "above" as "worth a look", not proof of sporadic-E.
+This is the **basic** MUF: the ITU-R P.1239 / CCIR value, without P.533's operational adjustment. P.533's *operational* MUF is a bit higher (typically 10–20%), so some paths marked "above basic MUF", especially long ones, may still be normal F2. Treat "above" as "worth a look", not proof of sporadic-E. VOACAP's operational MUF (TODO 26) will give a comparison.
 
 **Hops and reflection points.** The hop count is the **fewest hops** that cover the distance off the layer at a takeoff angle of at least 2°. One hop off a 300 km layer reaches about 3,400 km. The hops are spread evenly along the great circle; each meets the layer at a *reflection point*. The tool reads the layer height at those points, recomputes the hop count, and repeats until it settles. `takeoff_iono` is the takeoff angle for that hop count and height.
 
@@ -840,9 +840,9 @@ The MUF uses P.533's own hop count, `hops_muf`. P.533 requires a takeoff of at l
 **`mode_guess`** puts the two checks together:
 
 - **Es** where sporadic-E is the likely explanation: 6m and up at single-hop sporadic-E range (500–2,300 km), or 12m and 10m at that range when F2 can't carry the path. The same rule *Find sporadic-E paths* calls *high* confidence. Double-hop sporadic-E isn't considered.
-- Otherwise **F2**, **above MUF** or **no data**, as in `f2_status`.
+- Otherwise **F2**, **above basic MUF** or **no data**, as in `f2_status`.
 
-**Why "above F2 MUF" doesn't mean impossible.** Real contacts above the basic MUF happen all the time:
+**Why "above basic MUF" doesn't mean impossible.** Real contacts above the basic MUF happen all the time:
 
 - **Sporadic-E** (see [8.3](#83-find-sporadic-e-paths)) carries short paths on 10m and 6m.
 - **Scatter and ground wave** fill in the skip zone close to you, where the F2 MUF for short hops is low.
@@ -935,7 +935,7 @@ Finds paths sporadic-E most likely carried: one hop of 500–2,300 km on 12m, 10
 - **high** confidence: 6m and up (F2 rarely supports such short paths there), or the band is above the F2 MUF;
 - **possible**: 12m or 10m without ionosphere data.
 
-A 12m or 10m path that F2 *can* explain is not a candidate. If the input has been through *Check paths*, its `f2_status` is used. Otherwise, with *Check 12m/10m paths against the ionosphere* on, the tool checks them itself (KC2G if recent, else the CCIR model). With the CCIR model, "above F2 MUF" means above the typical MUF for that month, so treat 10m results as likely rather than certain.
+A 12m or 10m path that F2 *can* explain is not a candidate. If the input has been through *Check paths*, its `f2_status` is used. Otherwise, with *Check 12m/10m paths against the ionosphere* on, the tool checks them itself (KC2G if recent, else the CCIR model). With the CCIR model, "above basic MUF" means above the typical MUF for that month, so treat 10m results as likely rather than certain.
 
 **How strong the patch must have been.** The signal hit the patch at a slant, so the patch's own critical frequency (**foEs**) can be much lower than the band's frequency. The secant law gives the least it can have been:
 
@@ -975,7 +975,7 @@ Suppose that on a June afternoon your 6m log has a station 1,000 km away, and yo
 |---|---|---|---|---|
 | 6m (50.31 MHz) | 1,000 km | high (6m) | 9.5° | 12.2 |
 | 6m (50.31 MHz) | 1,800 km | high (6m) | 2.5° | 9.3 |
-| 10m (28.07 MHz) | 1,500 km | high if *above F2 MUF*, possible without ionosphere data | 4.5° | 5.5 |
+| 10m (28.07 MHz) | 1,500 km | high if *above basic MUF*, possible without ionosphere data | 4.5° | 5.5 |
 
 The 1,000 km 6m contact needed a patch with foEs of at least 12 MHz, a strong Es event. The 1,800 km contact needed only about 9 MHz. If several such candidates have midpoints within 500 km of each other inside an hour, they form one cloud: one patch of Es, seen from several paths.
 
@@ -1220,7 +1220,7 @@ Plus:
 
 **Ionosphere contours**: `level` (MHz or km).
 
-**Paths with ionosphere** (from *Check paths*): the input layer's fields, plus `iono_utc`, `iono_source`, `iono_note`, `freq_mhz`, `f2_status`, `muf_mhz`, `fof2_mhz`, `hmf2_km`, `hops_iono`, `takeoff_iono`, `hops_muf` (P.533 hop count used for the MUF), `mode_guess` (*F2* / *Es* / *above MUF* / *no data*) and `bands_f2`. See [8.2](#82-check-paths-against-the-ionosphere). With *Also write the results into the input layer* ticked, the same fields are also added to the input layer.
+**Paths with ionosphere** (from *Check paths*): the input layer's fields, plus `iono_utc`, `iono_source`, `iono_note`, `freq_mhz`, `f2_status`, `muf_mhz`, `fof2_mhz`, `hmf2_km`, `hops_iono`, `takeoff_iono`, `hops_muf` (P.533 hop count used for the MUF), `mode_guess` (*F2* / *Es* / *above basic MUF* / *no data*) and `bands_f2`. See [8.2](#82-check-paths-against-the-ionosphere). With *Also write the results into the input layer* ticked, the same fields are also added to the input layer.
 
 **Reflection points** (from *Check paths*): `path_fid`, `calls`, `kind` (*hop* or *control point*), `n` (number along the path), `hops`, `fof2_mhz`, `hmf2_km`, `mufd_mhz`, `point_muf_mhz` (control points: the MUF judged there), `freq_mhz`, `f2_status`.
 
@@ -1291,7 +1291,7 @@ With a reference pattern they also have:
   - `takeoff_deg`, `takeoff_min_deg`, `takeoff_max_deg`, `takeoff_300_deg`;
   - `hops`, `hmf2_km`;
   - `angle_method` (`KC2G`, `model` or `geometric`);
-  - `prop_mode` (`F2`, `above MUF` or `Es`).
+  - `prop_mode` (`F2`, `above basic MUF` or `Es`).
 - The table adds `by` (`all`, `distance`, `takeoff`) and `bin`.
 - Matched decodes (one row per decode, no counts): `utc` (slot start), `call`, `mhz`, `snr_a`, `snr_b` (empty if that receiver missed it), `diff_db`, `distance_km`, `bearing_deg`, `takeoff_deg`, `prop_mode`; with a reference pattern also `ref_gain_dbi` (the reference's modelled gain at that bearing and takeoff angle) and `abs_gain_dbi` (the other antenna's estimated gain; empty for single decodes).
 

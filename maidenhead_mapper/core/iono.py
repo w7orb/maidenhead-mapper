@@ -70,7 +70,15 @@ FD_COEFFS = (29.1996868566837e-6, 87.4376851991085e-9, 22.0776941764705e-12, 102
 DIPOLE_NT = 29806.0            # IGRF-13 (2020) dipole field at the equator, Earth's surface
 GYRO_MHZ_PER_NT = 27.992e-6    # electron gyrofrequency e B / (2 pi m)
 DEFAULT_R12 = 100.0            # for foE when the conditions don't say
-STATUS_F2, STATUS_ABOVE, STATUS_NO_DATA = "F2", "above F2 MUF", "no data"
+STATUS_F2, STATUS_ABOVE, STATUS_NO_DATA = "F2", "above basic MUF", "no data"
+# Older plugin versions (<= 0.14) wrote these for the same status (f2_status / mode_guess).
+LEGACY_ABOVE = ("above F2 MUF", "above MUF")
+
+
+def normalize_status(status):
+    """f2_status / mode_guess as read back from a layer: old "above F2 MUF" /
+    "above MUF" values become STATUS_ABOVE, anything else is returned unchanged."""
+    return STATUS_ABOVE if status in LEGACY_ABOVE else status
 
 
 # ------------------------------------------------------------------ ionosondes

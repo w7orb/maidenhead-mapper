@@ -65,7 +65,7 @@ MODES = ["Auto: KC2G when the path is recent, else the CCIR model",
          "KC2G only (current conditions)", "CCIR model only (monthly median, any date)"]
 REFRESH_S = 15 * 60       # KC2G updates about every 15 minutes; don't ask more often
 STATUS_COLOURS = {iono.STATUS_F2: "#2ca02c", iono.STATUS_ABOVE: "#d62728", iono.STATUS_NO_DATA: "#9e9e9e"}
-STATUS_LABELS = {iono.STATUS_F2: "F2 can support it", iono.STATUS_ABOVE: "Above F2 MUF (Es? scatter?)",
+STATUS_LABELS = {iono.STATUS_F2: "F2 can support it", iono.STATUS_ABOVE: "Above basic MUF (Es? scatter?)",
                  iono.STATUS_NO_DATA: "No ionosphere data"}
 
 
@@ -417,14 +417,15 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
             "• muf_mhz: the F2 basic MUF of the path by ITU-R P.533-14 (the lower of its control "
             "points: the mid-point for short paths, points half a hop in from each end for longer "
             "ones), with fof2_mhz and hmf2_km at those control points\n"
-            "• f2_status: 'F2' if the band is at or below the MUF, 'above F2 MUF' if not (the "
-            "contact used sporadic-E, scatter, or the map is off), 'no data'\n"
+            "• f2_status: 'F2' if the band is at or below the MUF, 'above basic MUF' if not (the "
+            "contact used sporadic-E, scatter, or the map is off; P.533's operational MUF is a "
+            "bit higher, so long paths just above it can still be F2), 'no data'\n"
             "• hops_muf: the hop count the MUF is computed with (P.533: hops of at most 4,000 km at "
             "3° or more). It can be one more than hops_iono, which allows 2°. More hops never raise "
             "the MUF (shorter hops have a lower one), so a path above the MUF is above it at any "
             "hop count\n"
             "• mode_guess: 'Es' where sporadic-E is the likely explanation (6m and up at single-Es-hop "
-            "range, 500–2,300 km; or 12m/10m there when F2 can't support it), else 'F2', 'above MUF' "
+            "range, 500–2,300 km; or 12m/10m there when F2 can't support it), else 'F2', 'above basic MUF' "
             "or 'no data'. hops_iono/takeoff_iono stay the F2 values\n"
             "• bands_f2: which of the path's bands F2 supports\n\n"
             "Exchange layers use grid_a/grid_b; station layers use grid and My grid. The band's FT8 "
@@ -573,7 +574,7 @@ class CheckPathsAlgorithm(QgsProcessingAlgorithm):
                                      iono.STATUS_F2 if freq <= pmuf else iono.STATUS_ABOVE])
                     rsink.addFeature(r, QgsFeatureSink.FastInsert)
 
-        feedback.pushInfo(self.tr("{} path(s): {} F2, {} above the F2 MUF, {} no data").format(
+        feedback.pushInfo(self.tr("{} path(s): {} F2, {} above the basic MUF, {} no data").format(
             sum(counts.values()), counts[iono.STATUS_F2], counts[iono.STATUS_ABOVE], counts[iono.STATUS_NO_DATA]))
         if labels:
             feedback.pushInfo(self.tr("Ionosphere used: {}").format(", ".join(f"{k} {n}" for k, n in labels.items())))
@@ -647,7 +648,7 @@ def _reflection_renderer():
              {"name": "circle", "color": "#7f7f7f", "size": "1.4", "outline_style": "no"}),
             (f"\"kind\" = 'control point' AND \"f2_status\" = '{iono.STATUS_F2}'", "Control point: F2 supports it",
              {"name": "diamond", "color": STATUS_COLOURS[iono.STATUS_F2], "size": "3"}),
-            (f"\"kind\" = 'control point' AND \"f2_status\" = '{iono.STATUS_ABOVE}'", "Control point: above F2 MUF",
+            (f"\"kind\" = 'control point' AND \"f2_status\" = '{iono.STATUS_ABOVE}'", "Control point: above basic MUF",
              {"name": "diamond", "color": STATUS_COLOURS[iono.STATUS_ABOVE], "size": "3"})):
         root.appendChild(QgsRuleBasedRenderer.Rule(QgsMarkerSymbol.createSimple(props), 0, 0, expr, label))
     return QgsRuleBasedRenderer(root)

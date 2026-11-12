@@ -49,3 +49,14 @@ def test_mode_guess():
     assert es.mode_guess(4000, "10m", iono.STATUS_ABOVE) == es.MODE_ABOVE     # beyond one Es hop
     assert es.mode_guess(1500, "20m", iono.STATUS_ABOVE) == es.MODE_ABOVE     # not an Es band
     assert es.mode_guess(1500, "10m", iono.STATUS_NO_DATA) == es.MODE_NO_DATA
+
+
+def test_status_strings_and_old_values():
+    from maidenhead_mapper.core import iono
+    assert iono.STATUS_ABOVE == es.MODE_ABOVE == "above basic MUF"
+    # values saved by <= 0.14 still work where a layer's f2_status is read back
+    assert iono.normalize_status("above F2 MUF") == iono.STATUS_ABOVE
+    assert iono.normalize_status("above MUF") == iono.STATUS_ABOVE
+    assert iono.normalize_status("F2") == "F2" and iono.normalize_status(None) is None
+    assert es.classify(1500, "10m", "above F2 MUF") == es.HIGH
+    assert es.mode_guess(4000, "10m", "above F2 MUF") == es.MODE_ABOVE

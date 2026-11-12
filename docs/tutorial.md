@@ -286,7 +286,7 @@ This is KC2G's **current** data only. There is no history.
 **You should see** a copy of the layer coloured by `f2_status`:
 
 - **green, F2**: the band was at or below the path's MUF. Normal F2 propagation explains it.
-- **red, above F2 MUF**: plain F2 hops don't explain it. It could be sporadic-E, scatter, an unusual path, or the ionosphere map being off.
+- **red, above basic MUF**: plain F2 hops don't explain it. It could be sporadic-E, scatter, an unusual path, or the ionosphere map being off.
 - **grey, no data**: no ionosphere data for that time, or the path had no grid or band.
 
 You also get a **reflection points** layer:

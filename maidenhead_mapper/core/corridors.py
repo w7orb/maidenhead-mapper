@@ -26,7 +26,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 from . import maidenhead as mh
 from .es import MODE_ABOVE, MODE_ES, MODE_F2  # noqa: F401  (re-exported for the algorithm)
-from .iono import STATUS_ABOVE
+from .iono import STATUS_ABOVE, normalize_status
 
 FIELD, SQUARE, BLOCK = "field", "square", "2x2"
 CELL_SIZES = (FIELD, BLOCK, SQUARE)
@@ -204,11 +204,13 @@ def records_from_model(model) -> Tuple[List[Record], int]:
 
 
 def _mode(r: Record) -> Optional[str]:
-    """'F2', 'Es', 'above MUF' or 'no data' from Check paths' fields (mode_guess preferred)."""
+    """'F2', 'Es', 'above basic MUF' or 'no data' from Check paths' fields (mode_guess
+    preferred). Old layers' "above F2 MUF" / "above MUF" read as "above basic MUF"."""
     if r.mode_guess:
-        return r.mode_guess
+        return normalize_status(r.mode_guess)
     if r.f2_status:
-        return {STATUS_ABOVE: MODE_ABOVE}.get(r.f2_status, r.f2_status)
+        status = normalize_status(r.f2_status)
+        return {STATUS_ABOVE: MODE_ABOVE}.get(status, status)
     return None
 
 
