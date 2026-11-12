@@ -43,7 +43,8 @@
 5. **19**: live hop estimates.
 6. **Corridors in the Activity timeline** (follow-up to 24).
 7. **A/B**: a setting for a fixed offset between the two receivers (follow-up to 16).
-8. Later / research: distance-vs-time charts with flare overlay and LSTID detection (may fit prop-archive better), 26 step 2 (coverage maps), 13 steps 2–3, 14, 15, 11, campaign mode for the 2 August 2027 eclipse.
+8. **27**: station calibration setting and `path_loss_db` (step 1); run WSJT-X FreqCal on WWV/WWVH for prop-archive's reference paths (step 2).
+9. Later / research: distance-vs-time charts with flare overlay and LSTID detection (may fit prop-archive better), 26 step 2 (coverage maps), 13 steps 2–3, 14, 15, 11, campaign mode for the 2 August 2027 eclipse.
 
 Long-term capture and analysis outside QGIS lives in the separate prop-archive project (`d:\projects\gis\prop-archive`), which uses the same research export schema (it needs updating to schema 1.1).
 
@@ -92,3 +93,7 @@ Long-term capture and analysis outside QGIS lives in the separate prop-archive p
     - Pitfalls: monthly medians (judge over many days, not one evening; better in prop-archive over months); SNR per 1 Hz vs 2500 Hz; observed SNR censored at the decode floor; assumed antennas and power for the far station; sunspot number input (already in the plugin).
     - Also settles item 18 by comparison with VOACAP's operational MUF.
     - Sources: ITS/NTIA VOACAP page; Debian voacapl; dvoacap on PyPI; HamSCI 3Y0K dataset post (VOACAP vs IONIS vs RBN); F6IRF VOACAP vs WSPR (2008).
+27. **Absolute path loss: station calibration and reference stations**: SNR = P + G_tx − L + G_rx − N, so with my own power, antenna gain and noise known, my exchanges give the channel loss L directly; the item 13 fit gives it for everyone up to one constant, and a known reference anchors that constant.
+    - Step 1 (S): a *station calibration* setting (my power, antenna gain by band, receive noise floor) and a `path_loss_db` field on exchanges and the research export where my end is known. Needs a clear note that the far station's power and antenna are assumed.
+    - Step 2 (M, prop-archive first): WWV/WWVH carrier S/N from WSJT-X FreqCal (`fmt.all`) as reference paths of known power (WWV ~1,500 km, WWVH ~4,300 km from CN85; 20 MHz is WWV only and the clean reference). Guide: prop-archive `docs/freqcal-reference-stations.md`. Collector in prop-archive once a real `fmt.all` exists; confirm the S/N bandwidth in the WSJT-X source before using it in absolute terms. CHU ended shortwave on 22 June 2026, so it's not an option.
+    - Step 3: show reference paths in the plugin next to FT8 corridors for the same hour, coloured by S/N, and use them to anchor item 13 step 2.
