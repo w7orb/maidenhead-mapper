@@ -54,7 +54,9 @@ def stats(distances, band=None, height_km=F2_HEIGHT_KM):
     sky = sorted(d for d in distances if d is not None and d >= LOCAL_KM)
     local = sum(1 for d in distances if d is not None and d < LOCAL_KM)
     if len(sky) < MIN_SAMPLES:
-        return SkipStats(len(sky), local, None, _pct(sky, 0.5), _pct(sky, 0.9), None)
+        med, p90 = _pct(sky, 0.5), _pct(sky, 0.9)
+        return SkipStats(len(sky), local, None, None if med is None else round(med),
+                         None if p90 is None else round(p90), None)
     skip = _pct(sky, SKIP_PCT)
     f = band_mhz(band) if band else None
     # Past one hop the edge is the band closing, not a skip zone: no foF2 from it

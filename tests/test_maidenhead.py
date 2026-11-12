@@ -127,3 +127,14 @@ def test_great_circle():
     assert parts[0][-1][1] == parts[1][0][1]
     assert all(abs(x) <= 180 for p in parts for x, _ in p)
     assert mh.great_circle(1, 2, 1, 2) == [[(1, 2), (1, 2)]]
+
+
+def test_cell_ring_densified_and_inset():
+    ring = mh.cell_ring(mh.bounds("MN"))                 # field 60..80°E, 40..50°N
+    assert ring[0] == ring[-1] and len(ring) == 2 * 20 + 2 * 10 + 1
+    lons = [x for x, _ in ring]
+    assert min(lons) == pytest.approx(60 + mh.SEAM_INSET_DEG) and min(lons) > 60   # off the 60°E seam
+    assert max(lons) < 80
+    assert min(y for _, y in ring) == 40 and max(y for _, y in ring) == 50
+    sq = mh.cell_ring(mh.bounds("CN85"))                  # 2°x1° square: a vertex per degree
+    assert len(sq) == 2 * 2 + 2 * 1 + 1

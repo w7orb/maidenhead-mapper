@@ -152,6 +152,56 @@ def test_robust_std_err_uses_measured_scatter():
     assert few["Q1"].std_err == pytest.approx(bal.PRIOR_SIGMA_DB / few["Q1"].n ** 0.5, abs=0.2)
 
 
+def _network(seed, sigma=7.0, n_core=30, n_pairs=300, n_single=200):
+    """Well-connected core stations, plus stations seen once; difference noise sigma."""
+    rng = random.Random(seed)
+    x = {f"C{i}": rng.gauss(0, 4) for i in range(n_core)}
+    core = list(x)
+
+    def pair(a, b):
+        d = x[a] - x[b] + rng.gauss(0, sigma)
+        s_ba = round(rng.uniform(-15, -5))
+        return bal.TwoWay(a, b, a_hears_b=s_ba, b_hears_a=round(s_ba + d))
+    pairs = [pair(*rng.sample(core, 2)) for _ in range(n_pairs)]
+    singles = []
+    for i in range(n_single):
+        x[f"S{i}"] = rng.gauss(0, 4)
+        singles.append(pair(rng.choice(core), f"S{i}"))
+    return pairs, singles
+
+
+def _implied_sigma(r):
+    import statistics
+    return statistics.median(r[c].std_err * r[c].n ** 0.5 for c in r if c.startswith("C"))
+
+
+def test_std_err_matches_known_scatter():
+    # std_err ~ sigma / sqrt(n): the implied sigma is close to the true 7 dB
+    for seed in range(3):
+        pairs, _ = _network(seed)
+        assert 5.8 < _implied_sigma(bal.solve(pairs, floor_db=None, compress_db=None)) < 8.2
+
+
+def test_single_exchange_stations_do_not_shrink_scatter():
+    # stations seen once fit their exchange exactly; their zero residuals must not
+    # pull sigma down (they did: ~1.4-2.4 dB instead of 7 before the leverage correction)
+    for seed in range(3):
+        pairs, singles = _network(seed)
+        core = _implied_sigma(bal.solve(pairs, floor_db=None, compress_db=None))
+        both = _implied_sigma(bal.solve(pairs + singles, floor_db=None, compress_db=None))
+        assert both == pytest.approx(core, rel=0.15) and both > 5.5
+
+
+def test_star_network_falls_back_to_prior():
+    # one hub, everyone else seen once: no residual says anything about the scatter
+    rng = random.Random(4)
+    pairs = [bal.TwoWay("HUB", f"S{i}", round(rng.uniform(-15, -5)), round(rng.uniform(-15, -5)))
+             for i in range(40)]
+    r = bal.solve(pairs, floor_db=None, compress_db=None)
+    assert r["S3"].std_err == pytest.approx(bal.PRIOR_SIGMA_DB, abs=0.5)
+    assert r["HUB"].std_err == pytest.approx(bal.PRIOR_SIGMA_DB / 40 ** 0.5, abs=0.2)
+
+
 def test_contrasts_skip_censored():
     rows = [("B", -5, -12), ("B", -3, -10), ("B", -2, -21), ("B", 18, 0), ("B", None, -5)]
     c = bal.contrasts(rows)

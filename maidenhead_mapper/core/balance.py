@@ -63,6 +63,17 @@ reweighted least squares with
 * sigma = 1.4826 * MAD of the exact residuals (robust), at least
   MIN_SIGMA_DB, and PRIOR_SIGMA_DB while the graph has too few cross-checks.
 
+Residuals and leverage: a fitted residual is smaller than the true error,
+most of all where the fit has little else to go on. A station seen in one
+exchange fits it exactly (residual 0), so on real data, where most stations
+appear once or twice, the raw residuals said sigma ~1 dB while the scatter
+between well-observed stations is 6.5-8 dB. Each residual is therefore
+scaled by 1/sqrt(1 - h), h being the edge's leverage. For unweighted least
+squares on a graph h is the effective resistance between the two stations,
+approximated here by 1/deg(A) + 1/deg(B) (exact differences only). Edges with
+h > MAX_LEVERAGE (any station seen once, two stations seen twice) say almost
+nothing about the scatter and are left out of it.
+
 Each pass solves the weighted least squares by Gauss-Seidel on the station
 graph. Standard errors are sigma / sqrt(n_eff), n_eff = sum of the
 station's Huber weights plus CENSORED_INFO per bounded difference (a bound
@@ -85,8 +96,11 @@ from dataclasses import dataclass
 from typing import Dict, List, Optional
 
 
-PRIOR_SIGMA_DB = 5.0   # typical scatter of (report A->B minus report B->A), fading included
+PRIOR_SIGMA_DB = 7.0   # typical scatter of (report A->B minus report B->A), fading included:
+                       # 6.5-8 dB between well-observed stations in a day of real 15m exchanges
 MIN_DOF = 10           # cross-checks needed to trust the measured scatter instead
+MIN_RESIDUALS = 10     # ... and at least this many usable (low-leverage) residuals
+MAX_LEVERAGE = 0.75    # residuals of edges with more leverage are left out of the scale
 FLOOR_DB = -20         # reports at or below: near the decode floor (censored)
 COMPRESS_DB = 15       # reports at or above: compressed by the WSJT-X detector (censored)
 HUBER_K = 1.345        # Huber tuning constant, in units of sigma (95% efficiency for Gaussian)
@@ -253,14 +267,28 @@ def solve(pairs: List[TwoWay], iterations=2000, tol=1e-6, floor_db=FLOOR_DB,
                 nb[c] = [(o, w[i], y[i] if edges[i][0] == c else -y[i]) for o, i in adj[c]]
         return nb
 
+    deg = defaultdict(int)              # exact differences per station (for leverage)
+    for a, b, _, s in edges:
+        if s == 0:
+            deg[a] += 1
+            deg[b] += 1
+
     def exact_residuals():
-        return [d - (x[a] - x[b]) for a, b, d, s in edges if s == 0]
+        """Exact-difference residuals scaled by 1/sqrt(1 - leverage); high-leverage edges left out."""
+        out = []
+        for a, b, d, s in edges:
+            if s:
+                continue
+            h = 1.0 / deg[a] + 1.0 / deg[b]
+            if h <= MAX_LEVERAGE:
+                out.append((d - (x[a] - x[b])) / math.sqrt(1.0 - h))
+        return out
 
     def scale():
         if dof >= MIN_DOF:
-            s = _mad_sigma(exact_residuals())
-            if s is not None:
-                return max(s, MIN_SIGMA_DB)
+            res = exact_residuals()
+            if len(res) >= MIN_RESIDUALS:
+                return max(_mad_sigma(res), MIN_SIGMA_DB)
         return PRIOR_SIGMA_DB
 
     _gauss_seidel(build(), x, iterations, tol)
@@ -285,16 +313,15 @@ def solve(pairs: List[TwoWay], iterations=2000, tol=1e-6, floor_db=FLOOR_DB,
         for c in cs:
             x[c] -= m
 
-    # standard errors: robust scale over the exact differences, prior when few cross-checks
+    # standard errors: leverage-corrected scale of the exact differences, prior when too few
     sigma = PRIOR_SIGMA_DB
     if dof >= MIN_DOF:
         res = exact_residuals()
-        if robust:
-            s = _mad_sigma(res)
-        else:
-            s = math.sqrt(sum(r * r for r in res) / dof) if res else None
-        if s is not None:
-            sigma = max(s, MIN_SIGMA_DB) if robust else s
+        if len(res) >= MIN_RESIDUALS:
+            if robust:
+                sigma = max(_mad_sigma(res), MIN_SIGMA_DB)
+            else:
+                sigma = math.sqrt(sum(r * r for r in res) / len(res))
     n_eff = defaultdict(float)
     for i, (a, b, _, s) in enumerate(edges):
         info = w[i] if s == 0 else CENSORED_INFO

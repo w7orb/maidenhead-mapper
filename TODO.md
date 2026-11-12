@@ -24,12 +24,12 @@
 | 17 | ~~Import ADIF logs~~ **done** | S | Medium–High | — | Maps your whole logging history (WSJT-X, LoTW, any logger), merges confirmations, and feeds Check paths / Station balance. |
 | 18 | Basic vs operational MUF in Check paths | S | Medium | 5, 8 | Decision pending. P.533's operational MUF is a bit higher than the basic MUF Check paths uses, so fewer long 10m paths would show as "above". Option: add the operational factors, or rename the status "above basic MUF". |
 | 19 | Live hop estimates from the ionosphere | M | Medium | 5 | The live map fills `hops_iono`/`takeoff_iono` as each exchange arrives, from the cached KC2G data (refreshed every 15 min), instead of only the fixed-300 km estimate. |
-| 20 | Fix: Station balance help text cut off | S | Low | — | The "<" in "< −3 dB" is read as formatting by QGIS, which hides the rest of the line after "good ears (". |
-| 21 | Fix: Skip distance distances unrounded | S | Low | — | `median_km`/`p90_km` show many decimals in hours with too few contacts for a skip edge. |
-| 22 | Fix: Maidenhead grid on non-Greenwich projections | S | Medium | — | Fields are drawn from their 4 corners only, so with an Americas-centred projection the 60°E edge lands on the wrong side and outer fields stop short of the map edge. Add points along each edge. |
-| 23 | Fix: Station balance `std_err_db` too optimistic | S | Medium | — | Stations seen once fit exactly (residual 0), so the scatter estimate drops to its 1 dB floor; real scatter is ~6.5–8 dB. Errors come out ~6× too small (±0.18 dB for 56 exchanges instead of ~±1.1), so "uncertain" rarely triggers. Estimate scatter from well-connected stations or correct for degrees of freedom. |
+| 20 | ~~Fix: Station balance help text cut off~~ **done** | S | Low | — | The "<" in "< −3 dB" is read as formatting by QGIS, which hides the rest of the line after "good ears (". |
+| 21 | ~~Fix: Skip distance distances unrounded~~ **done** | S | Low | — | `median_km`/`p90_km` show many decimals in hours with too few contacts for a skip edge. |
+| 22 | ~~Fix: Maidenhead grid on non-Greenwich projections~~ **done** | S | Medium | — | Fields are drawn from their 4 corners only, so with an Americas-centred projection the 60°E edge lands on the wrong side and outer fields stop short of the map edge. Add points along each edge. |
+| 23 | ~~Fix: Station balance `std_err_db` too optimistic~~ **done** | S | Medium | — | Stations seen once fit exactly (residual 0), so the scatter estimate drops to its 1 dB floor; real scatter is ~6.5–8 dB. Errors come out ~6× too small (±0.18 dB for 56 exchanges instead of ~±1.1), so "uncertain" rarely triggers. Estimate scatter from well-connected stations or correct for degrees of freedom. |
 
-**Done**: 1–10, 12, 17. **Open**: 11 (needs weeks of data), 13 (propagation model: dataset export first), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 16 (reference-antenna mode), 18 (decision pending: basic vs operational MUF), 19 (live hop estimates), 20–23 (fixes).
+**Done**: 1–10, 12, 17, 20–23. **Open**: 11 (needs weeks of data), 13 (propagation model: dataset export first), 14 (antenna pattern from neighbouring receivers: check the PSK Reporter grid query first), 15 (elevation pattern: needs days of A/B data), 16 (reference-antenna mode), 18 (decision pending: basic vs operational MUF), 19 (live hop estimates).
 
 ## Details
 

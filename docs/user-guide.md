@@ -107,7 +107,7 @@ Draws the locator grid as polygon layers with a `locator` label.
 
 **Output**: 324 fields and 32,400 squares for the whole world. Fields: `locator`, `field`, `level` (2 or 4). The layers come styled and labelled. Squares appear only when zoomed in past 1:20,000,000, and their labels past 1:15,000,000, so the world view stays readable.
 
-The grid always spans exactly −180 to 180 and −90 to 90, whatever basemap or projection you use.
+The grid always spans exactly −180 to 180 and −90 to 90, whatever basemap or projection you use. Cell edges have a point every degree, so they follow the curved meridians and parallels of other projections. The east and west edges sit a hair (0.000001°, about 0.1 m) inside each cell, so a field boundary that falls exactly on a projection's seam, like 60°E on a map centred on 120°W, stays on its own side of the map. The `locator` values are unchanged. Grids made before version 0.9.3 have 4-corner cells: make a new one if the outer cells of an Americas- or Pacific-centred map look wrong.
 
 ![Create Maidenhead grid dialog](images/dlg_create_grid.png)
 *The Create Maidenhead grid dialog.*
@@ -374,7 +374,9 @@ Two things make the fit sturdier than a plain average:
 - **Robust fitting (Huber).** Fading can make one exchange 20–30 dB off. An exchange that disagrees strongly with the rest of the fit gets less weight, so one wild exchange barely moves a station's balance.
 - **Censoring.** A report at or below **−20 dB** is near the decode floor: the signal was decoded only because it faded up for that slot, so the typical level was lower. A report at or above **+15 dB** is compressed by WSJT-X's detector, so the true level was higher. Such reports are used only as limits ("at most" or "at least"), not as exact values. When an exchange's two limits point in opposite directions, the exchange carries no information and is left out. `n_censored` and `n_dropped` count these per station.
 
-`std_err_db` is the fit's estimate of how uncertain the balance is. A station is marked **uncertain** when it has fewer usable exchanges than *Exchanges needed for a verdict*, or a standard error over 3 dB.
+`std_err_db` is the fit's estimate of how uncertain the balance is: the typical scatter between the two reports of an exchange, divided by √(number of exchanges). The scatter is measured from the data, but only from exchanges between stations seen several times. A station seen once always fits its one exchange perfectly, which says nothing about the scatter. With too little such data it uses 7 dB, typical for real FT8 data. In practice `std_err_db` is about **6–7 dB ÷ √n_two_way**: about 3 dB with 5 exchanges, 2 dB with 10, 1 dB with 40.
+
+A station is marked **uncertain** when it has fewer usable exchanges than *Exchanges needed for a verdict*, or a standard error over 3 dB.
 
 | Verdict | Balance | Meaning |
 |---|---|---|
@@ -399,7 +401,7 @@ It also compares **what you hear with what they hear**. When you decode a signal
 *The Station balance dialog.*
 
 ![Map of stations in North America, Europe and the Caribbean coloured by verdict](images/res_balance.png)
-*The 60 stations with the most two-way exchanges in one day's ALL.TXT: 25 loud but deaf (red), 17 balanced (green), 18 good ears (blue). One day is far less than the ~100 exchanges per station recommended, so read this as an illustration.*
+*The 60 stations with the most two-way exchanges in one day's ALL.TXT: 25 loud but deaf (red), 17 balanced (green), 18 good ears (blue). Made before version 0.9.3's standard-error fix; with it, a few of these stations become balanced or uncertain. One day is far less than the ~100 exchanges per station recommended, so read this as an illustration.*
 
 #### Example
 
@@ -413,21 +415,21 @@ S(W7ASS→W8F) − S(W8F→W7ASS) = −8 − (−15) = +7 dB
 
 Taken alone, this says W7ASS is 7 dB "louder or deafer" than W8F. But in the same day's data, the two reports of one exchange differed from each other with a spread of about 9 dB (standard deviation). One exchange tells you very little.
 
-**One day on 15m.** The log held 1,000 two-way exchanges on 15m. 181 of them had a report at the floor or compressed. They linked 659 stations, 620 of them in one connected group. The median station appeared in only 2 exchanges, so most stations come out **uncertain**: 438 uncertain, 89 loud but deaf, 67 good ears, 65 balanced. The best-observed stations:
+**One day on 15m.** On 11 November 2026 (UTC) the log held 947 two-way exchanges on 15m. 175 of them had a report at the floor or compressed. They linked 619 stations, 584 of them in one connected group. The median station appeared in only 2 exchanges, so most stations come out **uncertain**: 494 uncertain, 60 loud but deaf, 27 good ears, 38 balanced. The scatter measured from the well-observed stations was 6.0 dB. The best-observed stations:
 
-| call | balance_db | n_two_way | n_censored | verdict |
-|---|---|---|---|---|
-| KH8A | −4.4 | 56 | 8 | good ears |
-| V31MA | −0.1 | 50 | 13 | balanced |
-| W5RBD | +2.2 | 31 | 9 | balanced |
-| K2PL | +8.7 | 23 | 9 | loud but deaf |
-| WM3I | −7.4 | 19 | 6 | good ears |
+| call | balance_db | std_err_db | n_two_way | n_censored | verdict |
+|---|---|---|---|---|---|
+| KH8A | −5.4 | 0.84 | 50 | 7 | good ears |
+| V31MA | −0.9 | 0.92 | 46 | 13 | balanced |
+| JF8CFI | −0.9 | 1.03 | 32 | 3 | balanced |
+| W5RBD | +2.1 | 1.24 | 26 | 9 | balanced |
+| K2PL | +8.3 | 1.34 | 23 | 9 | loud but deaf |
 
-KH8A hears its partners about 4 dB better, relative to how they hear it, than the average station in the group does.
+KH8A hears its partners about 5 dB better, relative to how they hear it, than the average station in the group does, give or take about 1 dB. W5RBD's +2.1 ± 1.2 dB can't be told apart from 0: "balanced".
 
 #### Reading the results
 
-1. **Start with `n_two_way`.** Ignore verdicts based on a handful of exchanges, whatever the standard error says (see *Limits*).
+1. **Start with `n_two_way` and `std_err_db`.** A balance of +4 ± 3 dB says little; +8 ± 1 dB says a lot. Read the balance as "somewhere within about two standard errors of this".
 2. **Then look at the size of the balance.** ±3 to ±6 dB is ordinary station-to-station variation. +10 dB or more usually means a high-power station, or one with a noisy receiving location. −10 dB or less usually means a low-power station with a quiet location and a good receive antenna.
 3. **Find your own row** (`is_me` = 1). If you come out **loud but deaf**, others hear you better than you hear them: look for local noise (QRM), or you may be running more power than most. **Good ears** means your receive side is relatively strong.
 4. **Compare bands separately.** With *Separately per band* on, each band has its own groups and centring. A station can be loud but deaf on 20m and balanced on 15m, because noise levels differ by band.
@@ -436,7 +438,7 @@ KH8A hears its partners about 4 dB better, relative to how they hear it, than th
 #### Limits
 
 - FT8 reports are noisy. Single reports fade by up to 30 dB and the two reports come from different 15-second slots. The fit is robust (one wild exchange barely moves it), but it needs **lots of data**: averaging about 100 exchanges per station is recommended (DK3BA 2024). An hour of decoding gives a few per station.
-- **`std_err_db` is too optimistic when most stations have only one or two exchanges.** The fit estimates the scatter from how well it explains the data. A station seen once is always explained perfectly, so in sparse data the scatter estimate falls to its 1 dB minimum. In the 15m example above it came out at about 1 dB, while the real spread between well-observed stations was 6–8 dB. Until that is fixed, use a rule of thumb instead: the uncertainty is about **8 dB ÷ √n_two_way**. That is about ±2.5 dB with 10 exchanges, ±1.1 dB with 50 and ±0.8 dB with 100.
+- **`std_err_db` covers fading scatter only.** It assumes each exchange's error is independent. It doesn't cover a station that changes power or antenna during the day, or a station whose partners are all in one direction. Before version 0.9.3 it was far too small on sparse data (about ±0.2 dB where ±1 dB was right), because stations seen once pulled the scatter estimate down.
 - Reports at or below −20 dB are at the decode floor, and at or above +15 dB WSJT-X compresses them. Such reports are used only as limits, not exact values; `n_censored` and `n_dropped` count them.
 - The balance mixes power and noise. It can't tell a 1 kW station on a quiet hilltop from a 100 W station in a noisy suburb if both come out the same.
 - Propagation isn't perfectly reciprocal (polarisation and fading change within seconds), which is part of the scatter.
@@ -552,6 +554,7 @@ For each path in a station or exchange layer, works out whether the F2 layer cou
 | Sunspot number R12 for the model (0 = look it up) | 0 | |
 | Paths with ionosphere | temporary layer | A copy of the input with new fields. |
 | Reflection points | temporary layer | Optional. |
+| Also write the results into the input layer | off | Adds the new fields to the input layer itself too. See [Writing into the input layer](#writing-into-the-input-layer). |
 
 **New fields** on each path:
 
@@ -561,6 +564,8 @@ For each path in a station or exchange layer, works out whether the F2 layer cou
 | `muf_mhz` | The path's F2 **basic MUF** by ITU-R P.533-14. |
 | `fof2_mhz`, `hmf2_km` | foF2 and layer height where the MUF was judged. |
 | `hops_iono`, `takeoff_iono` | Likely hop count and takeoff angle at the measured layer height. |
+| `hops_muf` | The hop count the MUF was worked out with (P.533's rules). Usually the same as `hops_iono`; sometimes one more. |
+| `mode_guess` | The most likely way the signal travelled: **F2**, **Es** (sporadic-E), **above MUF** or **no data**. |
 | `bands_f2` | Which of the path's bands F2 supports. |
 | `freq_mhz` | The frequency judged: the band's FT8 frequency; a station on several bands is judged on its highest. |
 | `iono_source`, `iono_utc`, `iono_note` | Which data was used, its time, and why there was none. |
@@ -595,6 +600,15 @@ This is the **basic** MUF. P.533's *operational* MUF is typically 10–20% highe
 
 **Hops and reflection points.** The hop count is the **fewest hops** that cover the distance off the layer at a takeoff angle of at least 2°. One hop off a 300 km layer reaches about 3,400 km. The hops are spread evenly along the great circle; each meets the layer at a *reflection point*. The tool reads the layer height at those points, recomputes the hop count, and repeats until it settles. `takeoff_iono` is the takeoff angle for that hop count and height.
 
+The MUF uses P.533's own hop count, `hops_muf`. P.533 requires a takeoff of at least **3°** and hops of at most **4,000 km**, while `hops_iono` allows 2°. On a path near the limit of one hop count, `hops_muf` can therefore be one more than `hops_iono`. Most paths have the same value in both.
+
+**More hops never raise the MUF.** Shorter hops meet the layer at a steeper angle, and a steeper angle means a lower MUF. So the fewest hops always give the highest MUF. If a path is above the MUF with the fewest hops, it is above it with any number of hops: adding hops can't explain it.
+
+**`mode_guess`** puts the two checks together:
+
+- **Es** where sporadic-E is the likely explanation: 6m and up at single-hop sporadic-E range (500–2,300 km), or 12m and 10m at that range when F2 can't carry the path. The same rule *Find sporadic-E paths* calls *high* confidence. Double-hop sporadic-E isn't considered.
+- Otherwise **F2**, **above MUF** or **no data**, as in `f2_status`.
+
 **Why "above F2 MUF" doesn't mean impossible.** Real contacts above the basic MUF happen all the time:
 
 - **Sporadic-E** (see [8.3](#83-find-sporadic-e-paths)) carries short paths on 10m and 6m.
@@ -608,6 +622,14 @@ This is the **basic** MUF. P.533's *operational* MUF is typically 10–20% highe
 **Reflection points layer**: `kind` = *hop* (grey dots, where each hop meets the layer) or *control point* (diamonds where P.533 judges the MUF, green if the band fits, red if not). `path_fid` links each point to its path.
 
 The output paths are coloured by `f2_status`: green F2, red above, grey no data.
+
+#### Writing into the input layer
+
+Tick **Also write the results into the input layer** to keep the results with the data itself, for example in a saved live session. The tool still makes the output layer as usual. When the run finishes, it adds any of the new fields (`f2_status`, `muf_mhz`, `hops_iono`, `hops_muf`, `mode_guess` and the rest) that the input layer is missing, and fills them in for every path it checked.
+
+- Works on memory layers and GeoPackages, including the live map's layers and saved sessions.
+- If the layer is being edited, or can't be changed (read-only), the tool writes nothing into it and says so in the log. The output layer is still made. Save or cancel the edits and run it again.
+- On a live or session layer, exchanges that arrive **after** the run have empty values. An Activity timeline rebuild also empties them: the columns stay, the values don't. Run the tool again to fill them in.
 
 ![Check paths against the ionosphere dialog](images/dlg_check_paths.png)
 *The Check paths dialog.*
@@ -647,7 +669,7 @@ Over the whole 21:00 hour of the same log, 342 different station-and-band paths 
 - The **CCIR model** is a monthly median: expect foF2 within about 20% on a given day. It doesn't know about storms, flares or sporadic-E.
 - **KC2G** has no history. *Auto* uses it only within 3 hours of its data; older paths use the model.
 - It works out the **basic** MUF; the operational MUF is typically 10–20% higher.
-- It assumes the **fewest hops** at no less than 2° takeoff. Real signals may use more hops.
+- It assumes the **fewest hops** at no less than 2° takeoff (3° for the MUF). Real signals may use more hops, but more hops never raise the basic MUF, so this doesn't change `f2_status`.
 - A station on several bands is judged on its **highest** band only.
 - It judges the F2 layer only: no E layer, no absorption, no signal strength.
 
@@ -964,6 +986,8 @@ Plus:
 **Ionosondes**: `code`, `name`, `utc`, `age_min`, `fof2` (MHz), `hmf2` (km), `mufd` (MUF(3000), MHz), `md` (M(3000) factor), `foes` (sporadic-E critical frequency, MHz), `confidence` (KC2G's 0–100 rating), `source`.
 
 **Ionosphere contours**: `level` (MHz or km).
+
+**Paths with ionosphere** (from *Check paths*): the input layer's fields, plus `iono_utc`, `iono_source`, `iono_note`, `freq_mhz`, `f2_status`, `muf_mhz`, `fof2_mhz`, `hmf2_km`, `hops_iono`, `takeoff_iono`, `hops_muf` (P.533 hop count used for the MUF), `mode_guess` (*F2* / *Es* / *above MUF* / *no data*) and `bands_f2`. See [8.2](#82-check-paths-against-the-ionosphere). With *Also write the results into the input layer* ticked, the same fields are also added to the input layer.
 
 **Reflection points** (from *Check paths*): `path_fid`, `calls`, `kind` (*hop* or *control point*), `n` (number along the path), `hops`, `fof2_mhz`, `hmf2_km`, `mufd_mhz`, `point_muf_mhz` (control points: the MUF judged there), `freq_mhz`, `f2_status`.
 

@@ -11,6 +11,7 @@ from qgis.core import (
     QgsFillSymbol,
     QgsGeometry,
     QgsPalLayerSettings,
+    QgsPointXY,
     QgsProcessing,
     QgsProcessingAlgorithm,
     QgsProcessingException,
@@ -18,7 +19,6 @@ from qgis.core import (
     QgsProcessingParameterEnum,
     QgsProcessingParameterExtent,
     QgsProcessingParameterFeatureSink,
-    QgsRectangle,
     QgsSingleSymbolRenderer,
     QgsTextBufferSettings,
     QgsTextFormat,
@@ -112,7 +112,9 @@ class CreateGridAlgorithm(QgsProcessingAlgorithm):
             "Fields are 20°×10° (AA–RR, 324 worldwide). Squares are 2°×1° "
             "(e.g. CN85, 32,400 worldwide).\n\n"
             "Leave Extent empty for the whole world. The grid always lines up "
-            "with -180..180 / -90..90, whatever the extent or basemap."
+            "with -180..180 / -90..90, whatever the extent or basemap. Cell edges are "
+            "drawn with extra points so they follow curved meridians in other projections "
+            "(e.g. an Americas-centred Equal Earth map)."
         )
 
     def initAlgorithm(self, config=None):  # noqa: N802
@@ -171,7 +173,9 @@ class CreateGridAlgorithm(QgsProcessingAlgorithm):
                 if feedback.isCanceled():
                     break
                 feat = QgsFeature(fields)
-                feat.setGeometry(QgsGeometry.fromRect(QgsRectangle(w, s, e, n)))
+                # densified, and kept off seam meridians, so cells draw right in any projection
+                feat.setGeometry(QgsGeometry.fromPolygonXY(
+                    [[QgsPointXY(x, y) for x, y in mh.cell_ring((w, s, e, n))]]))
                 feat.setAttributes([loc, loc[:2], precision])
                 sink.addFeature(feat, QgsFeatureSink.FastInsert)
                 if i % 500 == 0:

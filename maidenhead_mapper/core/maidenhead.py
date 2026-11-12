@@ -108,6 +108,32 @@ def to_locator(lat: float, lon: float, precision: int = SQUARE) -> str:
     return display("".join(out))
 
 
+SEAM_INSET_DEG = 1e-6   # ~0.1 m: keeps cell edges off any projection's seam meridian
+
+
+def cell_ring(cell: Bounds, step_deg: float = 1.0, inset_deg: float = SEAM_INSET_DEG):
+    """Closed ring [(lon, lat), ...] for a cell, for drawing it as a polygon.
+
+    Edges get a vertex every `step_deg` so they follow curved meridians and
+    parallels in other projections (4 corners give straight chords that fall
+    short of the map edge). East and west edges move `inset_deg` inwards: a
+    field boundary can be exactly a projection's seam (60°E for a map centred
+    on 120°W), where PROJ may put the edge on either side of the map.
+    """
+    w, s, e, n = cell
+    w, e = w + inset_deg, e - inset_deg
+
+    def steps(a, b):
+        k = max(1, int(math.ceil(abs(b - a) / step_deg - 1e-9)))
+        return [a + (b - a) * i / k for i in range(k)]
+    ring = [(lon, s) for lon in steps(w, e)]            # south edge, west to east
+    ring += [(e, lat) for lat in steps(s, n)]           # east edge, south to north
+    ring += [(lon, n) for lon in steps(e, w)]           # north edge, east to west
+    ring += [(w, lat) for lat in steps(n, s)]           # west edge, north to south
+    ring.append(ring[0])
+    return ring
+
+
 def iter_cells(precision: int, extent: Optional[Bounds] = None) -> Iterator[Tuple[str, Bounds]]:
     """Yield (locator, bounds) for every cell of `precision` (2 or 4) that
     intersects `extent` (west, south, east, north). Defaults to the world."""

@@ -23,6 +23,8 @@ def test_stats():
     assert 6 < s.fof2_est_mhz < 10                          # 28 MHz with a ~2,000 km skip
     few = skip.stats([1000, 2000], "10m")
     assert few.skip_km is None and few.fof2_est_mhz is None and few.n == 2
+    odd = skip.stats([1000.3, 2000.123, 3348.1386], "10m")   # too few for an edge: still whole km
+    assert (odd.median_km, odd.p90_km) == (2000, 3079) and isinstance(odd.p90_km, int)
 
 
 def test_by_hour_and_summary():
